@@ -37,7 +37,6 @@ import json
 import logging
 import os
 import re
-import ssl
 import threading
 import urlparse
 
@@ -628,7 +627,7 @@ def _KwargsFromEnv():
                      os.path.join(cert_path, 'key.pem')),
         ca_cert=os.path.join(cert_path, 'ca.pem'),
         verify=True,
-        ssl_version=ssl.PROTOCOL_TLSv1,
+        ssl_version=None,
         assert_hostname=False)
   return params
 

@@ -28,7 +28,6 @@ from __future__ import with_statement
 
 
 import os
-import re
 import sys
 import zipfile
 
@@ -84,16 +83,14 @@ def ReadManifest(jar_file_name):
       manifest_string = jar.read(_MANIFEST_NAME)
     except KeyError:
       return None
-    return _ParseManifest(manifest_string, jar_file_name)
+    return _ParseManifest(manifest_string)
 
 
-def _ParseManifest(manifest_string, jar_file_name):
+def _ParseManifest(manifest_string):
   """Parse a Manifest object out of the given string.
 
   Args:
     manifest_string: a str or unicode that is the manifest contents.
-    jar_file_name: a str that is the path of the jar, for use in exception
-      messages.
 
   Returns:
     A Manifest object parsed out of the string.
@@ -103,22 +100,17 @@ def _ParseManifest(manifest_string, jar_file_name):
   """
 
   manifest_string = '\n'.join(manifest_string.splitlines()).rstrip('\n')
-  section_strings = re.split('\n{2,}', manifest_string)
-  parsed_sections = [_ParseManifestSection(s, jar_file_name)
-                     for s in section_strings]
+  section_strings = manifest_string.split('\n\n')
+  parsed_sections = [_ParseManifestSection(s) for s in section_strings]
   main_section = parsed_sections[0]
-  sections = {}
-  for entry in parsed_sections[1:]:
-    name = entry.get('Name')
-    if name is None:
-      raise InvalidJarError('%s: Manifest entry has no Name attribute: %r' %
-                            (jar_file_name, entry))
-    else:
-      sections[name] = entry
+  try:
+    sections = dict((entry['Name'], entry) for entry in parsed_sections[1:])
+  except KeyError:
+    raise InvalidJarError('Manifest entry has no Name attribute: %s' % entry)
   return Manifest(main_section, sections)
 
 
-def _ParseManifestSection(section, jar_file_name):
+def _ParseManifestSection(section):
   """Parse a dict out of the given manifest section string.
 
   Args:
@@ -127,8 +119,6 @@ def _ParseManifestSection(section, jar_file_name):
       > Name: section-name
       > Some-Attribute: some value
       > Another-Attribute: another value
-    jar_file_name: a str that is the path of the jar, for use in exception
-      messages.
 
   Returns:
     A dict where the keys are the attributes (here, 'Name', 'Some-Attribute',
@@ -138,13 +128,11 @@ def _ParseManifestSection(section, jar_file_name):
     InvalidJarError: if the manifest section is not well-formed.
   """
 
-  section = section.replace('\n ', '').rstrip('\n')
-  if not section:
-    return {}
+  section = section.replace('\n ', '')
   try:
     return dict(line.split(': ', 1) for line in section.split('\n'))
   except ValueError:
-    raise InvalidJarError('%s: Invalid manifest %r' % (jar_file_name, section))
+    raise InvalidJarError('Invalid manifest %r' % section)
 
 
 def Make(input_directory, output_directory, base_name, maximum_size=sys.maxint,

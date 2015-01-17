@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-version = '1.9.17'
+version = '1.9.15'
 
 setup(
   name='python-appengine',
@@ -8,6 +8,7 @@ setup(
   author='Jon San Miguel',
   author_email='jon.sanmiguel@optimizely.com',
   packages=find_packages(),
+  include_package_data=True,
   url='https://github.com/optimizely/python-appengine',
   download_url='https://github.com/optimizely/python-appengine/tarball/%s' % version,
   license='Apache License',

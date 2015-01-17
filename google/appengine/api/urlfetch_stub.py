@@ -67,8 +67,6 @@ REDIRECT_STATUSES = frozenset([
   httplib.TEMPORARY_REDIRECT,
 ])
 
-PRESERVE_ON_REDIRECT = frozenset(['GET', 'HEAD'])
-
 
 
 
@@ -442,15 +440,6 @@ class URLFetchServiceStub(apiproxy_stub.APIProxyStub):
           raise apiproxy_errors.ApplicationError(
               urlfetch_service_pb.URLFetchServiceError.MALFORMED_REPLY,
               error_msg)
-
-
-
-        if (http_response.status != httplib.TEMPORARY_REDIRECT and
-            method not in PRESERVE_ON_REDIRECT):
-          logging.warn('Received a %s to a %s. Redirecting with a GET',
-                       http_response.status, method)
-          method = 'GET'
-          payload = None
       else:
         response.set_statuscode(http_response.status)
         if (http_response.getheader('content-encoding') == 'gzip' and

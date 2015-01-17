@@ -45,8 +45,6 @@ __all__ = [
     "DatastoreInputReader",
     "DatastoreKeyInputReader",
     "FileInputReader",
-    "GoogleCloudStorageInputReader",
-    "GoogleCloudStorageRecordInputReader",
     "RandomStringInputReader",
     "RawDatastoreInputReader",
     "Error",
@@ -99,19 +97,11 @@ from google.appengine.ext.mapreduce import util
 
 try:
 
-  cloudstorage = None
   from google.appengine.ext import cloudstorage
   if hasattr(cloudstorage, "_STUB"):
     cloudstorage = None
 except ImportError:
   pass
-
-
-if cloudstorage is None:
-  try:
-    import cloudstorage
-  except ImportError:
-    pass
 
 
 
@@ -2736,9 +2726,6 @@ class _GoogleCloudStorageInputReader(InputReader):
     return "CloudStorage [%s, %s]" % (status, names)
 
 
-GoogleCloudStorageInputReader = _GoogleCloudStorageInputReader
-
-
 class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
   """Read data from a Google Cloud Storage file using LevelDB format.
 
@@ -2786,9 +2773,6 @@ class _GoogleCloudStorageRecordInputReader(_GoogleCloudStorageInputReader):
       except EOFError:
         self._cur_handle = None
         self._record_reader = None
-
-
-GoogleCloudStorageRecordInputReader = _GoogleCloudStorageRecordInputReader
 
 
 class _ReducerReader(_GoogleCloudStorageRecordInputReader):

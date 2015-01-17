@@ -14,10 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-
-
-
 """Channel support classes.
 
 Classes:
@@ -26,6 +22,7 @@ Classes:
     Creates a dispatcher that is added to dispatcher chain.  Handles polls from
     the client to retrieve messages for a given channel.
 """
+
 
 
 
@@ -58,9 +55,9 @@ def CreateChannelDispatcher(channel_service_stub):
 
 
 
-  from google.appengine.tools import dev_appserver
+  from google.appengine.tools import old_dev_appserver
 
-  class ChannelDispatcher(dev_appserver.URLDispatcher):
+  class ChannelDispatcher(old_dev_appserver.URLDispatcher):
     """Dispatcher that handles channel polls."""
 
     def __init__(self, channel_service_stub):

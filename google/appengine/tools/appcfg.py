@@ -126,6 +126,10 @@ SDK_PRODUCT = 'appcfg_py'
 DAY = 24*3600
 SUNDAY = 6
 
+SUPPORTED_RUNTIMES = (
+    'contrib-dart', 'dart', 'go', 'php', 'python', 'python27', 'java', 'java7',
+    'vm', 'custom')
+
 
 
 
@@ -2558,7 +2562,7 @@ class AppVersionUpload(object):
     self.file_batcher.Flush()
     self.blob_batcher.Flush()
     self.errorblob_batcher.Flush()
-    StatusUpdate('Uploaded %d files and blobs.' % num_files, self.error_fh)
+    StatusUpdate('Uploaded %d files and blobs' % num_files, self.error_fh)
 
   @staticmethod
   def _LogDoUploadException(exception):
@@ -2867,13 +2871,13 @@ class AppCfgApp(object):
 
     if not self.options.allow_any_runtime:
       if self.options.runtime:
-        if self.options.runtime not in appinfo.GetAllRuntimes():
+        if self.options.runtime not in SUPPORTED_RUNTIMES:
           _PrintErrorAndExit(self.error_fh,
                              '"%s" is not a supported runtime\n' %
                              self.options.runtime)
       else:
         appinfo.AppInfoExternal.ATTRIBUTES[appinfo.RUNTIME] = (
-            '|'.join(appinfo.GetAllRuntimes()))
+            '|'.join(SUPPORTED_RUNTIMES))
 
     action = self.args.pop(0)
 

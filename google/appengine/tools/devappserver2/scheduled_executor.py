@@ -22,7 +22,6 @@ import time
 
 
 class _Event(object):
-
   def __init__(self, eta, runnable, key):
     self._eta = eta
     self._runnable = runnable
@@ -63,7 +62,7 @@ class ScheduledExecutor(object):
     self._queue = []
     self._key_to_events = {}
     self._worker_thread = threading.Thread(
-        target=self._loop_and_run_scheduled_events, name="Scheduled Executor")
+        target=self._loop_and_run_scheduled_events)
 
   def start(self):
     self._worker_thread.start()

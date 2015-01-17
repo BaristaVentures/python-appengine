@@ -19,7 +19,6 @@
 Should be accessed by get() function.
 """
 
-import atexit
 import httplib
 import logging
 import os
@@ -77,9 +76,6 @@ class _LogManagerDisabled(object):
   def start(self):
     pass
 
-  def stop(self):
-    pass
-
   def add(self, app, module, version, instance):
     pass
 
@@ -111,14 +107,14 @@ class _LogManager(_LogManagerDisabled):
     self._lock = threading.RLock()
     self._containers = {}
 
+  def __del__(self):
+    for c in self._containers:
+      c.Stop()
+    self._server.Stop()
+
   def start(self):
     self._server.Start()
     http_utils.wait_for_connection(self._server.host, self._server.port, 100)
-
-  def stop(self):
-    for c in self._containers.itervalues():
-      c.Stop()
-    self._server.Stop()
 
   def add(self, app, module, version, instance):
     container_name = _make_container_name(app, module, version, instance)
@@ -201,7 +197,6 @@ def get(docker_client=None, log_server_port=_DEFAULT_LOG_SERVER_PORT,
   c = LogManager if enable_logging else LogManagerDisabled
   try:
     instance = c(docker_client, log_server_port)
-    atexit.register(c.stop, instance)
     instance.start()
 
     # To pass these values to Admin Server to query logs.

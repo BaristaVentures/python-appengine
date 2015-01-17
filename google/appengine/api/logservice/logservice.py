@@ -46,7 +46,6 @@ from google.appengine.api.logservice import log_service_pb
 from google.appengine.api.logservice import logsutil
 from google.appengine.datastore import datastore_rpc
 from google.appengine.runtime import apiproxy_errors
-from google.appengine.runtime import features
 
 
 AUTOFLUSH_ENABLED = True
@@ -82,12 +81,6 @@ _MAJOR_VERSION_ID_RE = re.compile(_MAJOR_VERSION_ID_PATTERN)
 
 _REQUEST_ID_PATTERN = r'^[\da-fA-F]+$'
 _REQUEST_ID_RE = re.compile(_REQUEST_ID_PATTERN)
-
-
-
-
-
-_NEWLINE_REPLACEMENT = '\0'
 
 
 class Error(Exception):
@@ -129,23 +122,33 @@ class TimeoutError(Error):
     return self.__last_end_time
 
 
-class _LogsDequeBuffer(object):
+class LogsBufferNew(object):
   """Threadsafe buffer for storing and periodically flushing app logs."""
 
-  def __init__(self):
-    """Initializes the buffer.
+  def __init__(self, stream=None, stderr=False):
+    """Initializes the buffer, which wraps an internal buffer or sys.stderr.
 
     The state of the LogsBuffer is protected by a separate lock.  The lock is
     acquired before any variables are mutated or accessed, and released
     afterward.  A recursive lock is used so that a single thread can acquire the
     lock multiple times, and release it only when an identical number of
     'unlock()' calls have been performed.
+
+    Args:
+      stream: Unused. Left there for backward compatibility.
+      stderr: If specified, use sys.stderr as the underlying stream.
+
+    Raises:
+      ValueError: if stream is provided.
     """
+    if stream is not None:
+      raise ValueError('underlying streams are no longer supported')
 
 
 
 
     self._buffer = collections.deque()
+    self._stderr = stderr
     self._lock = threading.RLock()
     self._reset()
 
@@ -163,6 +166,10 @@ class _LogsDequeBuffer(object):
 
   def stream(self):
     """Returns the underlying file-like object used to buffer logs."""
+    if self._stderr:
+
+
+      return sys.stderr
 
 
     return cStringIO.StringIO(self.contents())
@@ -232,12 +239,10 @@ class _LogsDequeBuffer(object):
                         for line in self._buffer)
     return [logsutil.ParseLogEntry(line) for line in without_newlines if line]
 
-  def write(self, lines):
+  def write(self, line):
     """Writes a line to the logs buffer."""
     with self._lock:
-
-      for line in cStringIO.StringIO(lines):
-        self._write(line)
+      return self._write(line)
 
   def writelines(self, seq):
     """Writes each line in the given sequence to the logs buffer."""
@@ -266,7 +271,10 @@ class _LogsDequeBuffer(object):
 
 
       self._reset()
-    self._put_line(line)
+    if self._stderr:
+      sys.stderr.write(line)
+    else:
+      self._put_line(line)
     self._autoflush()
 
   def flush(self):
@@ -283,11 +291,15 @@ class _LogsDequeBuffer(object):
 
   def _flush(self):
     """Internal version of flush() with no locking."""
+    if self._stderr:
+      sys.stderr.flush()
+      return
+
     lines_to_be_flushed = []
     try:
       while True:
         group = log_service_pb.UserAppLogGroup()
-        bytes_left = self._MAX_FLUSH_SIZE
+        bytes_left = LogsBufferNew._MAX_FLUSH_SIZE
         while self._buffer:
           bare_line = self._get_line()
 
@@ -301,7 +313,8 @@ class _LogsDequeBuffer(object):
 
 
 
-          message = self._truncate(message, self._MAX_LINE_SIZE)
+          message = LogsBufferNew._truncate(
+              message, LogsBufferNew._MAX_LINE_SIZE)
 
 
           if len(message) > bytes_left:
@@ -331,9 +344,10 @@ class _LogsDequeBuffer(object):
     except Exception, e:
       lines_to_be_flushed.reverse()
       self._buffer.extendleft(lines_to_be_flushed)
-      line = '-' * 80
-      msg = 'ERROR: Could not flush to log_service (%s)\n%s\n%s\n%s\n'
-      sys.stderr.write(msg % (e, line, '\n'.join(self._buffer), line))
+      if not self._stderr:
+        line = '-' * 80
+        msg = 'ERROR: Could not flush to log_service (%s)\n%s\n%s\n%s\n'
+        sys.stderr.write(msg % (str(e), line, '\n'.join(self._buffer), line))
       self._clear()
       raise
     else:
@@ -375,33 +389,6 @@ def write(message):
     message: A message (string) to be written to application logs.
   """
   logs_buffer().write(message)
-
-
-def write_record(level, created, message):
-  """Add a 'record' to the logs buffer, and checks for autoflush.
-
-  Arguments:
-    level: the logging level of the record. From 0 to 4 inclusive.
-    created: the time in seconds the record was created.
-    message: the formatted message.
-  """
-
-
-
-
-
-  message = message.replace('\r\n', _NEWLINE_REPLACEMENT)
-  message = message.replace('\r', _NEWLINE_REPLACEMENT)
-  message = message.replace('\n', _NEWLINE_REPLACEMENT)
-  if isinstance(message, unicode):
-    message = message.encode('UTF-8')
-
-
-
-
-  logs_buffer().write('LOG %d %d %s\n' % (level,
-                                          long(created * 1000 * 1000),
-                                          message))
 
 
 def clear():
@@ -1062,13 +1049,15 @@ def fetch(start_time=None,
   return _LogQueryResult(request, timeout=timeout)
 
 
-class _LogsStreamBuffer(object):
-  """Threadsafe buffer for storing and periodically flushing app logs.
 
-  This is the classic version that works with streams. It is still supported
-  for the early bootstrap LogsBuffer (which uses stderr) and for Python 2.5
-  runtime (which uses a custom stream).
-  """
+
+
+
+
+
+
+class LogsBufferOld(object):
+  """Threadsafe buffer for storing and periodically flushing app logs."""
 
   _MAX_FLUSH_SIZE = 1000 * 1000
   _MAX_LINE_SIZE = _MAX_FLUSH_SIZE
@@ -1231,9 +1220,9 @@ class _LogsStreamBuffer(object):
       for timestamp_usec, level, message in logs:
 
 
-        message = self._truncate(message, self._MAX_LINE_SIZE)
+        message = self._truncate(message, LogsBufferOld._MAX_LINE_SIZE)
 
-        if byte_size + len(message) > self._MAX_FLUSH_SIZE:
+        if byte_size + len(message) > LogsBufferOld._MAX_FLUSH_SIZE:
           break
         line = group.add_log_line()
         line.set_timestamp_usec(timestamp_usec)
@@ -1272,14 +1261,8 @@ class _LogsStreamBuffer(object):
 
 
 
-def LogsBuffer(stream=None, stderr=False):
 
-
-  if stream or stderr or not features.IsEnabled('LogsBufferNew'):
-    return _LogsStreamBuffer(stream, stderr)
-  else:
-    return _LogsDequeBuffer()
-
+LogsBuffer = LogsBufferOld
 
 
 _global_buffer = LogsBuffer(stderr=True)

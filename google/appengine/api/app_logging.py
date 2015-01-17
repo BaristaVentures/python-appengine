@@ -31,11 +31,13 @@ Classes defined here:
 
 
 
+
+
+
 import logging
 
 from google.appengine import runtime
 from google.appengine.api import logservice
-from google.appengine.runtime import features
 
 
 
@@ -69,17 +71,12 @@ class AppLogsHandler(logging.Handler):
     This implementation is based on the implementation of
     StreamHandler.emit()."""
     try:
-      if features.IsEnabled("LogServiceWriteRecord"):
-        logservice.write_record(self._AppLogsLevel(record.levelno),
-                                record.created,
-                                self.format(record))
-      else:
-        message = self._AppLogsMessage(record)
-        if isinstance(message, unicode):
-          message = message.encode("UTF-8")
+      message = self._AppLogsMessage(record)
+      if isinstance(message, unicode):
+        message = message.encode("UTF-8")
 
 
-        logservice.write(message)
+      logservice.write(message)
     except (KeyboardInterrupt, SystemExit, runtime.DeadlineExceededError):
       raise
     except:
