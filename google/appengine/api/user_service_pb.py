@@ -18,11 +18,9 @@
 
 
 from google.net.proto import ProtocolBuffer
+import abc
 import array
 import dummy_thread as thread
-
-__pychecker__ = """maxreturns=0 maxbranches=0 no-callinit
-                   unusednames=printElemNumber,debug_strs no-special"""
 
 if hasattr(ProtocolBuffer, 'ExtendableProtocolMessage'):
   _extension_runtime = True
@@ -318,30 +316,25 @@ class CreateLoginURLResponse(ProtocolBuffer.ProtocolMessage):
 
   def IsInitialized(self, debug_strs=None):
     initialized = 1
-    if (not self.has_login_url_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: login_url not set.')
     return initialized
 
   def ByteSize(self):
     n = 0
-    n += self.lengthString(len(self.login_url_))
-    return n + 1
+    if (self.has_login_url_): n += 1 + self.lengthString(len(self.login_url_))
+    return n
 
   def ByteSizePartial(self):
     n = 0
-    if (self.has_login_url_):
-      n += 1
-      n += self.lengthString(len(self.login_url_))
+    if (self.has_login_url_): n += 1 + self.lengthString(len(self.login_url_))
     return n
 
   def Clear(self):
     self.clear_login_url()
 
   def OutputUnchecked(self, out):
-    out.putVarInt32(10)
-    out.putPrefixedString(self.login_url_)
+    if (self.has_login_url_):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.login_url_)
 
   def OutputPartial(self, out):
     if (self.has_login_url_):
@@ -552,30 +545,25 @@ class CreateLogoutURLResponse(ProtocolBuffer.ProtocolMessage):
 
   def IsInitialized(self, debug_strs=None):
     initialized = 1
-    if (not self.has_logout_url_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: logout_url not set.')
     return initialized
 
   def ByteSize(self):
     n = 0
-    n += self.lengthString(len(self.logout_url_))
-    return n + 1
+    if (self.has_logout_url_): n += 1 + self.lengthString(len(self.logout_url_))
+    return n
 
   def ByteSizePartial(self):
     n = 0
-    if (self.has_logout_url_):
-      n += 1
-      n += self.lengthString(len(self.logout_url_))
+    if (self.has_logout_url_): n += 1 + self.lengthString(len(self.logout_url_))
     return n
 
   def Clear(self):
     self.clear_logout_url()
 
   def OutputUnchecked(self, out):
-    out.putVarInt32(10)
-    out.putPrefixedString(self.logout_url_)
+    if (self.has_logout_url_):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.logout_url_)
 
   def OutputPartial(self, out):
     if (self.has_logout_url_):
@@ -952,44 +940,26 @@ class GetOAuthUserResponse(ProtocolBuffer.ProtocolMessage):
 
   def IsInitialized(self, debug_strs=None):
     initialized = 1
-    if (not self.has_email_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: email not set.')
-    if (not self.has_user_id_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: user_id not set.')
-    if (not self.has_auth_domain_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: auth_domain not set.')
     return initialized
 
   def ByteSize(self):
     n = 0
-    n += self.lengthString(len(self.email_))
-    n += self.lengthString(len(self.user_id_))
-    n += self.lengthString(len(self.auth_domain_))
+    if (self.has_email_): n += 1 + self.lengthString(len(self.email_))
+    if (self.has_user_id_): n += 1 + self.lengthString(len(self.user_id_))
+    if (self.has_auth_domain_): n += 1 + self.lengthString(len(self.auth_domain_))
     if (self.has_user_organization_): n += 1 + self.lengthString(len(self.user_organization_))
     if (self.has_is_admin_): n += 2
     if (self.has_client_id_): n += 1 + self.lengthString(len(self.client_id_))
     n += 1 * len(self.scopes_)
     for i in xrange(len(self.scopes_)): n += self.lengthString(len(self.scopes_[i]))
     if (self.has_is_project_writer_): n += 2
-    return n + 3
+    return n
 
   def ByteSizePartial(self):
     n = 0
-    if (self.has_email_):
-      n += 1
-      n += self.lengthString(len(self.email_))
-    if (self.has_user_id_):
-      n += 1
-      n += self.lengthString(len(self.user_id_))
-    if (self.has_auth_domain_):
-      n += 1
-      n += self.lengthString(len(self.auth_domain_))
+    if (self.has_email_): n += 1 + self.lengthString(len(self.email_))
+    if (self.has_user_id_): n += 1 + self.lengthString(len(self.user_id_))
+    if (self.has_auth_domain_): n += 1 + self.lengthString(len(self.auth_domain_))
     if (self.has_user_organization_): n += 1 + self.lengthString(len(self.user_organization_))
     if (self.has_is_admin_): n += 2
     if (self.has_client_id_): n += 1 + self.lengthString(len(self.client_id_))
@@ -1009,12 +979,15 @@ class GetOAuthUserResponse(ProtocolBuffer.ProtocolMessage):
     self.clear_is_project_writer()
 
   def OutputUnchecked(self, out):
-    out.putVarInt32(10)
-    out.putPrefixedString(self.email_)
-    out.putVarInt32(18)
-    out.putPrefixedString(self.user_id_)
-    out.putVarInt32(26)
-    out.putPrefixedString(self.auth_domain_)
+    if (self.has_email_):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.email_)
+    if (self.has_user_id_):
+      out.putVarInt32(18)
+      out.putPrefixedString(self.user_id_)
+    if (self.has_auth_domain_):
+      out.putVarInt32(26)
+      out.putPrefixedString(self.auth_domain_)
     if (self.has_user_organization_):
       out.putVarInt32(34)
       out.putPrefixedString(self.user_organization_)
@@ -1148,172 +1121,7 @@ class GetOAuthUserResponse(ProtocolBuffer.ProtocolMessage):
   _STYLE = """"""
   _STYLE_CONTENT_TYPE = """"""
   _PROTO_DESCRIPTOR_NAME = 'apphosting.GetOAuthUserResponse'
-class CheckOAuthSignatureRequest(ProtocolBuffer.ProtocolMessage):
-
-  def __init__(self, contents=None):
-    pass
-    if contents is not None: self.MergeFromString(contents)
-
-
-  def MergeFrom(self, x):
-    assert x is not self
-
-  def Equals(self, x):
-    if x is self: return 1
-    return 1
-
-  def IsInitialized(self, debug_strs=None):
-    initialized = 1
-    return initialized
-
-  def ByteSize(self):
-    n = 0
-    return n
-
-  def ByteSizePartial(self):
-    n = 0
-    return n
-
-  def Clear(self):
-    pass
-
-  def OutputUnchecked(self, out):
-    pass
-
-  def OutputPartial(self, out):
-    pass
-
-  def TryMerge(self, d):
-    while d.avail() > 0:
-      tt = d.getVarInt32()
-
-
-      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
-      d.skipData(tt)
-
-
-  def __str__(self, prefix="", printElemNumber=0):
-    res=""
-    return res
-
-
-  def _BuildTagLookupTable(sparse, maxtag, default=None):
-    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
-
-
-  _TEXT = _BuildTagLookupTable({
-    0: "ErrorCode",
-  }, 0)
-
-  _TYPES = _BuildTagLookupTable({
-    0: ProtocolBuffer.Encoder.NUMERIC,
-  }, 0, ProtocolBuffer.Encoder.MAX_TYPE)
-
-
-  _STYLE = """"""
-  _STYLE_CONTENT_TYPE = """"""
-  _PROTO_DESCRIPTOR_NAME = 'apphosting.CheckOAuthSignatureRequest'
-class CheckOAuthSignatureResponse(ProtocolBuffer.ProtocolMessage):
-  has_oauth_consumer_key_ = 0
-  oauth_consumer_key_ = ""
-
-  def __init__(self, contents=None):
-    if contents is not None: self.MergeFromString(contents)
-
-  def oauth_consumer_key(self): return self.oauth_consumer_key_
-
-  def set_oauth_consumer_key(self, x):
-    self.has_oauth_consumer_key_ = 1
-    self.oauth_consumer_key_ = x
-
-  def clear_oauth_consumer_key(self):
-    if self.has_oauth_consumer_key_:
-      self.has_oauth_consumer_key_ = 0
-      self.oauth_consumer_key_ = ""
-
-  def has_oauth_consumer_key(self): return self.has_oauth_consumer_key_
-
-
-  def MergeFrom(self, x):
-    assert x is not self
-    if (x.has_oauth_consumer_key()): self.set_oauth_consumer_key(x.oauth_consumer_key())
-
-  def Equals(self, x):
-    if x is self: return 1
-    if self.has_oauth_consumer_key_ != x.has_oauth_consumer_key_: return 0
-    if self.has_oauth_consumer_key_ and self.oauth_consumer_key_ != x.oauth_consumer_key_: return 0
-    return 1
-
-  def IsInitialized(self, debug_strs=None):
-    initialized = 1
-    if (not self.has_oauth_consumer_key_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: oauth_consumer_key not set.')
-    return initialized
-
-  def ByteSize(self):
-    n = 0
-    n += self.lengthString(len(self.oauth_consumer_key_))
-    return n + 1
-
-  def ByteSizePartial(self):
-    n = 0
-    if (self.has_oauth_consumer_key_):
-      n += 1
-      n += self.lengthString(len(self.oauth_consumer_key_))
-    return n
-
-  def Clear(self):
-    self.clear_oauth_consumer_key()
-
-  def OutputUnchecked(self, out):
-    out.putVarInt32(10)
-    out.putPrefixedString(self.oauth_consumer_key_)
-
-  def OutputPartial(self, out):
-    if (self.has_oauth_consumer_key_):
-      out.putVarInt32(10)
-      out.putPrefixedString(self.oauth_consumer_key_)
-
-  def TryMerge(self, d):
-    while d.avail() > 0:
-      tt = d.getVarInt32()
-      if tt == 10:
-        self.set_oauth_consumer_key(d.getPrefixedString())
-        continue
-
-
-      if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
-      d.skipData(tt)
-
-
-  def __str__(self, prefix="", printElemNumber=0):
-    res=""
-    if self.has_oauth_consumer_key_: res+=prefix+("oauth_consumer_key: %s\n" % self.DebugFormatString(self.oauth_consumer_key_))
-    return res
-
-
-  def _BuildTagLookupTable(sparse, maxtag, default=None):
-    return tuple([sparse.get(i, default) for i in xrange(0, 1+maxtag)])
-
-  koauth_consumer_key = 1
-
-  _TEXT = _BuildTagLookupTable({
-    0: "ErrorCode",
-    1: "oauth_consumer_key",
-  }, 1)
-
-  _TYPES = _BuildTagLookupTable({
-    0: ProtocolBuffer.Encoder.NUMERIC,
-    1: ProtocolBuffer.Encoder.STRING,
-  }, 1, ProtocolBuffer.Encoder.MAX_TYPE)
-
-
-  _STYLE = """"""
-  _STYLE_CONTENT_TYPE = """"""
-  _PROTO_DESCRIPTOR_NAME = 'apphosting.CheckOAuthSignatureResponse'
 if _extension_runtime:
   pass
 
-__all__ = ['UserServiceError','CreateLoginURLRequest','CreateLoginURLResponse','CreateLogoutURLRequest','CreateLogoutURLResponse','GetOAuthUserRequest','GetOAuthUserResponse','CheckOAuthSignatureRequest','CheckOAuthSignatureResponse']
+__all__ = ['UserServiceError','CreateLoginURLRequest','CreateLoginURLResponse','CreateLogoutURLRequest','CreateLogoutURLResponse','GetOAuthUserRequest','GetOAuthUserResponse']

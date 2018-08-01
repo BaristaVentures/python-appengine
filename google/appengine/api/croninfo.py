@@ -32,6 +32,7 @@ application. Supports loading the records from yaml.
 
 
 import logging
+import os
 import sys
 import traceback
 
@@ -42,11 +43,21 @@ except ImportError:
 
 from google.appengine.cron import groc
 from google.appengine.cron import groctimespecification
-from google.appengine.api import appinfo
-from google.appengine.api import validation
-from google.appengine.api import yaml_builder
-from google.appengine.api import yaml_listener
-from google.appengine.api import yaml_object
+
+
+if os.environ.get('APPENGINE_RUNTIME') == 'python27':
+  from google.appengine.api import appinfo
+  from google.appengine.api import validation
+  from google.appengine.api import yaml_builder
+  from google.appengine.api import yaml_listener
+  from google.appengine.api import yaml_object
+else:
+  from google.appengine.api import appinfo
+  from google.appengine.api import validation
+  from google.appengine.api import yaml_builder
+  from google.appengine.api import yaml_listener
+  from google.appengine.api import yaml_object
+
 
 _URL_REGEX = r'^/.*$'
 _TIMEZONE_REGEX = r'^.{0,100}$'
@@ -57,6 +68,8 @@ SERVER_ID_RE_STRING = r'(?!-)[a-z\d\-]{1,63}'
 
 
 SERVER_VERSION_RE_STRING = r'(?!-)[a-z\d\-]{1,100}'
+
+
 _VERSION_REGEX = r'^(?:(?:(%s):)?)(%s)$' % (SERVER_ID_RE_STRING,
                                             SERVER_VERSION_RE_STRING)
 
@@ -119,10 +132,34 @@ TIMEZONE = 'timezone'
 DESCRIPTION = 'description'
 TARGET = 'target'
 
+RETRY_PARAMETERS = 'retry_parameters'
+JOB_RETRY_LIMIT = 'job_retry_limit'
+JOB_AGE_LIMIT = 'job_age_limit'
+MIN_BACKOFF_SECONDS = 'min_backoff_seconds'
+MAX_BACKOFF_SECONDS = 'max_backoff_seconds'
+MAX_DOUBLINGS = 'max_doublings'
 
 class MalformedCronfigurationFile(Exception):
   """Configuration file for Cron is malformed."""
   pass
+
+
+class RetryParameters(validation.Validated):
+  """Retry parameters for a single cron job."""
+  ATTRIBUTES = {
+      JOB_RETRY_LIMIT: validation.Optional(
+          validation.Range(minimum=0,
+
+                           maximum=sys.maxint,
+                           range_type=int)),
+      JOB_AGE_LIMIT: validation.Optional(validation.TimeValue()),
+      MIN_BACKOFF_SECONDS: validation.Optional(
+          validation.Range(0.0, None, range_type=float)),
+      MAX_BACKOFF_SECONDS: validation.Optional(
+          validation.Range(0.0, None, range_type=float)),
+      MAX_DOUBLINGS: validation.Optional(
+          validation.Range(0, None, range_type=int)),
+  }
 
 
 class CronEntry(validation.Validated):
@@ -132,6 +169,7 @@ class CronEntry(validation.Validated):
       SCHEDULE: GrocValidator(),
       TIMEZONE: TimezoneValidator(),
       DESCRIPTION: validation.Optional(_DESCRIPTION_REGEX),
+      RETRY_PARAMETERS: validation.Optional(RetryParameters),
       TARGET: validation.Optional(_VERSION_REGEX),
   }
 
@@ -151,10 +189,10 @@ def LoadSingleCron(cron_info, open_fn=None):
   listener = yaml_listener.EventListener(handler)
   listener.Parse(cron_info)
 
-  cron_info = handler.GetResults()
-  if len(cron_info) < 1:
+  cron_info_result = handler.GetResults()
+  if len(cron_info_result) < 1:
     raise MalformedCronfigurationFile('Empty cron configuration.')
-  if len(cron_info) > 1:
+  if len(cron_info_result) > 1:
     raise MalformedCronfigurationFile('Multiple cron sections '
                                       'in configuration.')
-  return cron_info[0]
+  return cron_info_result[0]

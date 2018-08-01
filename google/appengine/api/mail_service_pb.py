@@ -18,11 +18,9 @@
 
 
 from google.net.proto import ProtocolBuffer
+import abc
 import array
 import dummy_thread as thread
-
-__pychecker__ = """maxreturns=0 maxbranches=0 no-callinit
-                   unusednames=printElemNumber,debug_strs no-special"""
 
 if hasattr(ProtocolBuffer, 'ExtendableProtocolMessage'):
   _extension_runtime = True
@@ -33,6 +31,7 @@ else:
 
 from google.appengine.api.api_base_pb import *
 import google.appengine.api.api_base_pb
+google_dot_apphosting_dot_api_dot_api__base__pb = __import__('google.appengine.api.api_base_pb', {}, {}, [''])
 class MailServiceError(ProtocolBuffer.ProtocolMessage):
 
 
@@ -128,6 +127,8 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
   data_ = ""
   has_contentid_ = 0
   contentid_ = ""
+  has_contentid_set_ = 0
+  contentid_set_ = 0
 
   def __init__(self, contents=None):
     if contents is not None: self.MergeFromString(contents)
@@ -171,12 +172,26 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
 
   def has_contentid(self): return self.has_contentid_
 
+  def contentid_set(self): return self.contentid_set_
+
+  def set_contentid_set(self, x):
+    self.has_contentid_set_ = 1
+    self.contentid_set_ = x
+
+  def clear_contentid_set(self):
+    if self.has_contentid_set_:
+      self.has_contentid_set_ = 0
+      self.contentid_set_ = 0
+
+  def has_contentid_set(self): return self.has_contentid_set_
+
 
   def MergeFrom(self, x):
     assert x is not self
     if (x.has_filename()): self.set_filename(x.filename())
     if (x.has_data()): self.set_data(x.data())
     if (x.has_contentid()): self.set_contentid(x.contentid())
+    if (x.has_contentid_set()): self.set_contentid_set(x.contentid_set())
 
   def Equals(self, x):
     if x is self: return 1
@@ -186,6 +201,8 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
     if self.has_data_ and self.data_ != x.data_: return 0
     if self.has_contentid_ != x.has_contentid_: return 0
     if self.has_contentid_ and self.contentid_ != x.contentid_: return 0
+    if self.has_contentid_set_ != x.has_contentid_set_: return 0
+    if self.has_contentid_set_ and self.contentid_set_ != x.contentid_set_: return 0
     return 1
 
   def IsInitialized(self, debug_strs=None):
@@ -205,6 +222,7 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
     n += self.lengthString(len(self.filename_))
     n += self.lengthString(len(self.data_))
     if (self.has_contentid_): n += 1 + self.lengthString(len(self.contentid_))
+    if (self.has_contentid_set_): n += 2
     return n + 2
 
   def ByteSizePartial(self):
@@ -216,12 +234,14 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
       n += 1
       n += self.lengthString(len(self.data_))
     if (self.has_contentid_): n += 1 + self.lengthString(len(self.contentid_))
+    if (self.has_contentid_set_): n += 2
     return n
 
   def Clear(self):
     self.clear_filename()
     self.clear_data()
     self.clear_contentid()
+    self.clear_contentid_set()
 
   def OutputUnchecked(self, out):
     out.putVarInt32(10)
@@ -231,6 +251,9 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
     if (self.has_contentid_):
       out.putVarInt32(26)
       out.putPrefixedString(self.contentid_)
+    if (self.has_contentid_set_):
+      out.putVarInt32(104)
+      out.putBoolean(self.contentid_set_)
 
   def OutputPartial(self, out):
     if (self.has_filename_):
@@ -242,6 +265,9 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
     if (self.has_contentid_):
       out.putVarInt32(26)
       out.putPrefixedString(self.contentid_)
+    if (self.has_contentid_set_):
+      out.putVarInt32(104)
+      out.putBoolean(self.contentid_set_)
 
   def TryMerge(self, d):
     while d.avail() > 0:
@@ -255,6 +281,9 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
       if tt == 26:
         self.set_contentid(d.getPrefixedString())
         continue
+      if tt == 104:
+        self.set_contentid_set(d.getBoolean())
+        continue
 
 
       if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
@@ -266,6 +295,7 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
     if self.has_filename_: res+=prefix+("FileName: %s\n" % self.DebugFormatString(self.filename_))
     if self.has_data_: res+=prefix+("Data: %s\n" % self.DebugFormatString(self.data_))
     if self.has_contentid_: res+=prefix+("ContentID: %s\n" % self.DebugFormatString(self.contentid_))
+    if self.has_contentid_set_: res+=prefix+("ContentID_set: %s\n" % self.DebugFormatBool(self.contentid_set_))
     return res
 
 
@@ -275,20 +305,23 @@ class MailAttachment(ProtocolBuffer.ProtocolMessage):
   kFileName = 1
   kData = 2
   kContentID = 3
+  kContentID_set = 13
 
   _TEXT = _BuildTagLookupTable({
     0: "ErrorCode",
     1: "FileName",
     2: "Data",
     3: "ContentID",
-  }, 3)
+    13: "ContentID_set",
+  }, 13)
 
   _TYPES = _BuildTagLookupTable({
     0: ProtocolBuffer.Encoder.NUMERIC,
     1: ProtocolBuffer.Encoder.STRING,
     2: ProtocolBuffer.Encoder.STRING,
     3: ProtocolBuffer.Encoder.STRING,
-  }, 3, ProtocolBuffer.Encoder.MAX_TYPE)
+    13: ProtocolBuffer.Encoder.NUMERIC,
+  }, 13, ProtocolBuffer.Encoder.MAX_TYPE)
 
 
   _STYLE = """"""
@@ -444,6 +477,8 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
   textbody_ = ""
   has_htmlbody_ = 0
   htmlbody_ = ""
+  has_amphtmlbody_ = 0
+  amphtmlbody_ = ""
 
   def __init__(self, contents=None):
     self.to_ = []
@@ -563,6 +598,19 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
 
   def has_htmlbody(self): return self.has_htmlbody_
 
+  def amphtmlbody(self): return self.amphtmlbody_
+
+  def set_amphtmlbody(self, x):
+    self.has_amphtmlbody_ = 1
+    self.amphtmlbody_ = x
+
+  def clear_amphtmlbody(self):
+    if self.has_amphtmlbody_:
+      self.has_amphtmlbody_ = 0
+      self.amphtmlbody_ = ""
+
+  def has_amphtmlbody(self): return self.has_amphtmlbody_
+
   def attachment_size(self): return len(self.attachment_)
   def attachment_list(self): return self.attachment_
 
@@ -606,6 +654,7 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
     if (x.has_subject()): self.set_subject(x.subject())
     if (x.has_textbody()): self.set_textbody(x.textbody())
     if (x.has_htmlbody()): self.set_htmlbody(x.htmlbody())
+    if (x.has_amphtmlbody()): self.set_amphtmlbody(x.amphtmlbody())
     for i in xrange(x.attachment_size()): self.add_attachment().CopyFrom(x.attachment(i))
     for i in xrange(x.header_size()): self.add_header().CopyFrom(x.header(i))
 
@@ -630,6 +679,8 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
     if self.has_textbody_ and self.textbody_ != x.textbody_: return 0
     if self.has_htmlbody_ != x.has_htmlbody_: return 0
     if self.has_htmlbody_ and self.htmlbody_ != x.htmlbody_: return 0
+    if self.has_amphtmlbody_ != x.has_amphtmlbody_: return 0
+    if self.has_amphtmlbody_ and self.amphtmlbody_ != x.amphtmlbody_: return 0
     if len(self.attachment_) != len(x.attachment_): return 0
     for e1, e2 in zip(self.attachment_, x.attachment_):
       if e1 != e2: return 0
@@ -667,6 +718,7 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
     n += self.lengthString(len(self.subject_))
     if (self.has_textbody_): n += 1 + self.lengthString(len(self.textbody_))
     if (self.has_htmlbody_): n += 1 + self.lengthString(len(self.htmlbody_))
+    if (self.has_amphtmlbody_): n += 1 + self.lengthString(len(self.amphtmlbody_))
     n += 1 * len(self.attachment_)
     for i in xrange(len(self.attachment_)): n += self.lengthString(self.attachment_[i].ByteSize())
     n += 1 * len(self.header_)
@@ -690,6 +742,7 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
       n += self.lengthString(len(self.subject_))
     if (self.has_textbody_): n += 1 + self.lengthString(len(self.textbody_))
     if (self.has_htmlbody_): n += 1 + self.lengthString(len(self.htmlbody_))
+    if (self.has_amphtmlbody_): n += 1 + self.lengthString(len(self.amphtmlbody_))
     n += 1 * len(self.attachment_)
     for i in xrange(len(self.attachment_)): n += self.lengthString(self.attachment_[i].ByteSizePartial())
     n += 1 * len(self.header_)
@@ -705,6 +758,7 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
     self.clear_subject()
     self.clear_textbody()
     self.clear_htmlbody()
+    self.clear_amphtmlbody()
     self.clear_attachment()
     self.clear_header()
 
@@ -739,6 +793,9 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
       out.putVarInt32(82)
       out.putVarInt32(self.header_[i].ByteSize())
       self.header_[i].OutputUnchecked(out)
+    if (self.has_amphtmlbody_):
+      out.putVarInt32(90)
+      out.putPrefixedString(self.amphtmlbody_)
 
   def OutputPartial(self, out):
     if (self.has_sender_):
@@ -773,6 +830,9 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
       out.putVarInt32(82)
       out.putVarInt32(self.header_[i].ByteSizePartial())
       self.header_[i].OutputPartial(out)
+    if (self.has_amphtmlbody_):
+      out.putVarInt32(90)
+      out.putPrefixedString(self.amphtmlbody_)
 
   def TryMerge(self, d):
     while d.avail() > 0:
@@ -813,6 +873,9 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
         d.skip(length)
         self.add_header().TryMerge(tmp)
         continue
+      if tt == 90:
+        self.set_amphtmlbody(d.getPrefixedString())
+        continue
 
 
       if (tt == 0): raise ProtocolBuffer.ProtocolBufferDecodeError
@@ -844,6 +907,7 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
     if self.has_subject_: res+=prefix+("Subject: %s\n" % self.DebugFormatString(self.subject_))
     if self.has_textbody_: res+=prefix+("TextBody: %s\n" % self.DebugFormatString(self.textbody_))
     if self.has_htmlbody_: res+=prefix+("HtmlBody: %s\n" % self.DebugFormatString(self.htmlbody_))
+    if self.has_amphtmlbody_: res+=prefix+("AmpHtmlBody: %s\n" % self.DebugFormatString(self.amphtmlbody_))
     cnt=0
     for e in self.attachment_:
       elm=""
@@ -874,6 +938,7 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
   kSubject = 6
   kTextBody = 7
   kHtmlBody = 8
+  kAmpHtmlBody = 11
   kAttachment = 9
   kHeader = 10
 
@@ -889,7 +954,8 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
     8: "HtmlBody",
     9: "Attachment",
     10: "Header",
-  }, 10)
+    11: "AmpHtmlBody",
+  }, 11)
 
   _TYPES = _BuildTagLookupTable({
     0: ProtocolBuffer.Encoder.NUMERIC,
@@ -903,7 +969,8 @@ class MailMessage(ProtocolBuffer.ProtocolMessage):
     8: ProtocolBuffer.Encoder.STRING,
     9: ProtocolBuffer.Encoder.STRING,
     10: ProtocolBuffer.Encoder.STRING,
-  }, 10, ProtocolBuffer.Encoder.MAX_TYPE)
+    11: ProtocolBuffer.Encoder.STRING,
+  }, 11, ProtocolBuffer.Encoder.MAX_TYPE)
 
 
   _STYLE = """"""

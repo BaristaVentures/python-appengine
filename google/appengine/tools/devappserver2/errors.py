@@ -29,3 +29,15 @@ class InvalidAppConfigError(Error):
 
 class AppConfigNotFoundError(Error):
   """Application configuration file not found i.e. no app.yaml in directory."""
+
+
+class DockerfileError(Error):
+  """Raised if a Dockerfile was found along with a non-custom runtime."""
+
+
+class GrpcPortError(Error):
+  """Raised if a grpc port was not allocated as desired."""
+
+
+class Python3NotFoundError(Error):
+  """Raised if Python3 executable is missing."""

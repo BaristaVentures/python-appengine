@@ -35,7 +35,7 @@ else:
 
 
 def start_process(args, input_string='', env=None, cwd=None, stdout=None,
-                  stderr=None):
+                  stderr=None, shell=False):
   """Starts a subprocess like subprocess.Popen, but is threadsafe.
 
   The value of input_string is passed to stdin of the subprocess, which is then
@@ -51,6 +51,8 @@ def start_process(args, input_string='', env=None, cwd=None, stdout=None,
         stdout descriptor for the subprocess.
     stderr: A file descriptor, file object or subprocess.PIPE to use for the
         stderr descriptor for the subprocess.
+    shell: A boolean. If True, the specified command will be executed through
+        the shell.
 
   Returns:
     A subprocess.Popen instance for the created subprocess.
@@ -70,8 +72,11 @@ def start_process(args, input_string='', env=None, cwd=None, stdout=None,
     else:
       startupinfo = None
 
+    if shell:
+      args = ' '.join(args)
     p = subprocess.Popen(args, env=env, cwd=cwd, stdout=stdout, stderr=stderr,
-                         stdin=subprocess.PIPE, startupinfo=startupinfo)
+                         stdin=subprocess.PIPE, startupinfo=startupinfo,
+                         shell=shell)
     if _SUBPROCESS_STDIN_IS_THREAD_HOSTILE:
       p.stdin.write(input_string)
       p.stdin.close()
@@ -94,7 +99,7 @@ def start_process_file(args, input_string, env, cwd, stdin=None, stdout=None,
   the value of input_string and the second file is returned to the caller.
 
   Args:
-    args: A string or sequence of strings containing the program arguments.
+    args: A list of strings containing the program arguments.
     input_string: A string to pass to stdin of the subprocess.
     env: A dict containing environment variables for the subprocess.
     cwd: A string containing the directory to switch to before executing the
@@ -133,4 +138,3 @@ def start_process_file(args, input_string, env, cwd, stdin=None, stdout=None,
 
   p.child_out = child_out
   return p
-

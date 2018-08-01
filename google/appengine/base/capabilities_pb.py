@@ -18,11 +18,9 @@
 
 
 from google.net.proto import ProtocolBuffer
+import abc
 import array
 import dummy_thread as thread
-
-__pychecker__ = """maxreturns=0 maxbranches=0 no-callinit
-                   unusednames=printElemNumber,debug_strs no-special"""
 
 if hasattr(ProtocolBuffer, 'ExtendableProtocolMessage'):
   _extension_runtime = True
@@ -198,12 +196,14 @@ class CapabilityConfigList(ProtocolBuffer.ProtocolMessage):
 class CapabilityConfig(ProtocolBuffer.ProtocolMessage):
 
 
+  DEFAULT      =    0
   ENABLED      =    1
   SCHEDULED    =    2
   DISABLED     =    3
   UNKNOWN      =    4
 
   _Status_NAMES = {
+    0: "DEFAULT",
     1: "ENABLED",
     2: "SCHEDULED",
     3: "DISABLED",

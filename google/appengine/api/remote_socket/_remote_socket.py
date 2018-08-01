@@ -629,7 +629,10 @@ class socket(object):
       return inet_pton(self.family, res[4][0])
 
   def _SetProtoFromAddr(self, proto, address, hostname_hint=None):
-    address, port = address
+    if self.family == AF_INET6 and len(address) == 4:
+      address, port, unused_flow_info, unused_scope_id = address
+    else:
+      address, port = address
     proto.set_packed_address(self._GetPackedAddr(address))
     proto.set_port(port)
     proto.set_hostname_hint(hostname_hint or address)
@@ -874,7 +877,7 @@ class socket(object):
 
     See recv() for documentation about the flags.
     """
-    raise SocketApiNotImplementedError()
+    return self.recvfrom_into(buf, nbytes, flags)[0]
 
   def recvfrom(self, buffersize, flags=0):
     """recvfrom(buffersize[, flags]) -> (data, address info)
@@ -916,10 +919,10 @@ class socket(object):
       address = (
           inet_ntop(self.family, reply.received_from().packed_address()),
           reply.received_from().port())
+      if self.family == AF_INET6:
+        address += (0, 0)
 
     return reply.data(), address
-
-
 
   def recvfrom_into(self, buffer, nbytes=0, flags=0):
     """recvfrom_into(buffer[, nbytes[, flags]]) -> (nbytes, address info)
@@ -927,8 +930,12 @@ class socket(object):
     Like recv_into(buffer[, nbytes[, flags]]) but also return the
     sender's address info.
     """
-
-    raise SocketApiNotImplementedError()
+    if nbytes == 0 or nbytes > len(buffer):
+      nbytes = len(buffer)
+    (data, addr) = self.recvfrom(nbytes, flags)
+    data = bytearray(data)
+    buffer[:len(data)] = data
+    return (len(data), addr)
 
   def send(self, data, flags=0):
     """send(data[, flags]) -> count

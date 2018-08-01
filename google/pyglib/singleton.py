@@ -16,20 +16,31 @@
 #
 # Copyright 2011 Google Inc. All Rights Reserved.
 
-"""Thread-safe implementation of a singleton decorator.
+"""A thread-compatible singleton decorator.
 
 Sometimes, only a single instance of a class should ever be created. This file
 provides a wrapper that turns a class into a Singleton. The constructor may
 only be called once; a static method Singleton() provides access to the
 constructed instance. If Singleton() is called before the constructor, or if
-the constructor is called multiple times, Errors are raised. This wrapper is
-thread-safe; calls to the constructor and Singleton() method are protected
-by per-class locks.
+the constructor is called multiple times, Errors are raised.
+
+The only thread-safety guarantees this wrapper provides are:
+
+* Multiple calls to Singleton() may occur concurrently, and no two calls will
+  return different objects.
+* `__init__` will never be called twice, even in the face of concurrent calls.
+  Exactly one attempt will succeed, all others will raise an Error.
+
+All calls to Singleton() must happen after the constructor call -- so either
+the constructor must be invoked before any threads would try to access the
+singleton (e.g. in main()), or else the threads must use an additional lock
+to synchronize attempts to invoke the constructor. In that case, using a
+memoized factory function or a non-singleton global guarded by a lock may be
+more appropriate.
 
 Singletons are often associated with bad coding practices; see
-https://wiki/Main/SingletonsConsideredDangerous and decide if you should
-really be using this functionality. Consider alternatives, like the
-"Borg pattern" where object state (instead of object identity) is shared.
+http://wiki/Main/SingletonsConsideredDangerous and decide if you should
+really be using this functionality.
 
 To make your singletons more testable, use the following idiom:
 
@@ -58,25 +69,6 @@ class Foo(object):
 a = Foo()
 b = Foo.Singleton()
 c = Foo.Singleton()
-assert a == b
-assert b == c
-
-
-Note that class decorator syntax was added after python2.4. If your code
-is python2.4 compliant, use an idiom like:
-
-from google.pyglib import singleton
-
-
-class Foo(object):
-  "Foo class"
-
-Bar = singleton.Singleton(Foo)
-
-
-a = Bar()
-b = Bar.Singleton()
-c = Bar.Singleton()
 assert a == b
 assert b == c
 """
@@ -141,7 +133,7 @@ def _GetClassLock(cls):
 def Singleton(cls):
   """Turn a class into a singleton.
 
-  One call to the constructor is allowed. After that, all future calls
+  Exactly one call to the constructor is required. After that, all future calls
   must be to the Singleton() static method.
 
   This code is multithread-safe. Shared locks are held for brief periods
@@ -151,7 +143,7 @@ def Singleton(cls):
     cls: The class to decorate.
 
   Returns:
-    The singleton class. Note that this class is an extension
+    The singleton class. Note that this class is a sub-class
     of the class it is decorating.
 
   Raises:

@@ -21,6 +21,8 @@
 
 """The Python datastore protocol buffer definition (old name)."""
 
+from __future__ import absolute_import
+
 
 
 
@@ -44,6 +46,3 @@ from google.appengine.api.api_base_pb import VoidProto
 from google.appengine.datastore import datastore_v3_pb
 from google.appengine.datastore.datastore_v3_pb import *
 
-
-if hasattr(datastore_v3_pb, '_DatastoreService_ClientStub'):
-  _DatastoreService_ClientStub = datastore_v3_pb._DatastoreService_ClientStub

@@ -46,10 +46,13 @@ import time
 import traceback
 import simplejson
 
+from google.appengine.datastore import entity_pb
 from google.appengine.ext import ndb
 
 from google.appengine import runtime
+from google.appengine.api import datastore
 from google.appengine.api import datastore_errors
+from google.appengine.api import datastore_types
 from google.appengine.api import logservice
 from google.appengine.api import modules
 from google.appengine.api import taskqueue
@@ -70,7 +73,7 @@ from google.appengine.runtime import apiproxy_errors
 
 
 try:
-  from google.appengine.ext import cloudstorage
+  from google.appengine._internal import cloudstorage
 
 
 
@@ -93,8 +96,8 @@ except ImportError:
 _TEST_INJECTED_FAULTS = set()
 
 
-def _run_task_hook(hooks, method, task, queue_name):
-  """Invokes hooks.method(task, queue_name).
+def _run_task_hook(hooks, method, task, queue_name, transactional=False):
+  """Invokes hooks.method(task, queue_name, transactional).
 
   Args:
     hooks: A hooks.Hooks instance or None.
@@ -102,19 +105,63 @@ def _run_task_hook(hooks, method, task, queue_name):
         "enqueue_kickoff_task".
     task: The taskqueue.Task to pass to the hook method.
     queue_name: The name of the queue to pass to the hook method.
+    transactional: Whether the task should be added transactionally.
 
   Returns:
     True if the hooks.Hooks instance handled the method, False otherwise.
+  Raises:
+    Exception: if we try to add a named task transactionally.
   """
+
+
+
+
+
+  if task.name is not None and transactional:
+    raise Exception("Named tasks cannot be added transactionally.")
+
   if hooks is not None:
     try:
-      getattr(hooks, method)(task, queue_name)
+      getattr(hooks, method)(task, queue_name, transactional)
     except NotImplementedError:
 
       return False
 
     return True
   return False
+
+
+def _calculate_last_work_item(data):
+  """Calculates the last work item processed.
+
+  Args:
+    data: a single data item being processed.
+  Returns:
+    A stringified version of the data item.
+  """
+
+  try:
+    if isinstance(data, db.Model):
+      data = data.key()
+    elif isinstance(data, ndb.Model):
+      data = data.key
+    elif isinstance(data, datastore.Entity):
+      data = data.key()
+    elif isinstance(data, entity_pb.EntityProto):
+      data = datastore_types.Key._FromPb(data.key())
+    elif isinstance(data, entity_pb.Reference):
+      data = datastore_types.Key._FromPb(data)
+    elif isinstance(data, datastore.Key):
+
+      pass
+    else:
+
+      return repr(data)[:100]
+    return repr(data)
+  except (ValueError, UnicodeDecodeError):
+
+
+    return str(data)[:100]
 
 
 class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
@@ -521,11 +568,14 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
         shard_state.set_input_finished()
 
     except Exception, e:
-      logging.warning("Shard %s got error.", shard_state.shard_id)
-      logging.error(traceback.format_exc())
+      if not isinstance(e, errors.TransientError):
+        logging.warning("Shard %s got error.", shard_state.shard_id)
+        logging.error(traceback.format_exc())
+      else:
+        logging.debug("Shard %s got error.", shard_state.shard_id)
 
 
-      if type(e) is errors.FailJobError:
+      if isinstance(e, errors.FailJobError):
         logging.error("Got FailJobError.")
         task_directive = self._TASK_DIRECTIVE.FAIL_TASK
       else:
@@ -563,7 +613,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     Returns:
       Whether this shard has finished processing all its input split.
     """
-    processing_limit = self._processing_limit(tstate.mapreduce_spec)
+    processing_limit = self._processing_limit(tstate)
     if processing_limit == 0:
       return
 
@@ -587,12 +637,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
 
 
-      if isinstance(entity, db.Model):
-        shard_state.last_work_item = repr(entity.key())
-      elif isinstance(entity, ndb.Model):
-        shard_state.last_work_item = repr(entity.key)
-      else:
-        shard_state.last_work_item = repr(entity)[:100]
+      shard_state.last_work_item = _calculate_last_work_item(entity)
 
       processing_limit -= 1
 
@@ -729,7 +774,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                    shard_state.shard_number, shard_state.mapreduce_id)
       task = None
     elif task_directive == self._TASK_DIRECTIVE.FAIL_TASK:
-      logging.critical("Shard %s failed permanently.", shard_state.shard_id)
+      logging.error("Shard %s failed permanently.", shard_state.shard_id)
       task = None
     elif task_directive == self._TASK_DIRECTIVE.RETRY_SHARD:
       logging.warning("Shard %s is going to be attempted for the %s time.",
@@ -743,7 +788,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       task = self._state_to_task(tstate, shard_state)
     else:
       assert task_directive == self._TASK_DIRECTIVE.PROCEED_TASK
-      countdown = self._get_countdown_for_next_slice(spec)
+      countdown = self._get_countdown_for_next_slice(tstate)
       task = self._state_to_task(tstate, shard_state, countdown=countdown)
 
 
@@ -753,7 +798,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                                 "default")
     config = util.create_datastore_write_config(spec)
 
-    @db.transactional(retries=5)
+    @db.transactional(retries=5, xg=True)
     def _tx():
       """The Transaction helper."""
       fresh_shard_state = model.ShardState.get_by_shard_id(tstate.shard_id)
@@ -773,9 +818,7 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
 
 
       if fresh_shard_state.active:
-
-
-        self._add_task(task, spec, queue_name)
+        self._add_task(task, spec, queue_name, transactional=True)
 
     try:
       _tx()
@@ -908,36 +951,19 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                       parameters.config.TASK_MAX_DATA_PROCESSING_ATTEMPTS)
     return self._TASK_DIRECTIVE.RETRY_SHARD
 
-  @staticmethod
-  def get_task_name(shard_id, slice_id, retry=0):
-    """Compute single worker task name.
-
-    Args:
-      shard_id: shard id.
-      slice_id: slice id.
-      retry: current shard retry count.
-
-    Returns:
-      task name which should be used to process specified shard/slice.
-    """
-
-
-    return "appengine-mrshard-%s-%s-retry-%s" % (
-        shard_id, slice_id, retry)
-
-  def _get_countdown_for_next_slice(self, spec):
+  def _get_countdown_for_next_slice(self, tstate):
     """Get countdown for next slice's task.
 
     When user sets processing rate, we set countdown to delay task execution.
 
     Args:
-      spec: model.MapreduceSpec
+      tstate: An instance of TransientShardState.
 
     Returns:
       countdown in int.
     """
     countdown = 0
-    if self._processing_limit(spec) != -1:
+    if self._processing_limit(tstate) != -1:
       countdown = max(
           int(parameters.config._SLICE_DURATION_SEC -
               (self._time() - self._start_time)), 0)
@@ -965,18 +991,12 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
     """
     base_path = tstate.base_path
 
-    task_name = MapperWorkerCallbackHandler.get_task_name(
-        tstate.shard_id,
-        tstate.slice_id,
-        tstate.retries)
-
     headers = util._get_task_headers(tstate.mapreduce_spec.mapreduce_id)
     headers[util._MR_SHARD_ID_TASK_HEADER] = tstate.shard_id
 
     worker_task = model.HugeTask(
         url=base_path + "/worker_callback/" + tstate.shard_id,
         params=tstate.to_dict(),
-        name=task_name,
         eta=eta,
         countdown=countdown,
         parent=shard_state,
@@ -987,7 +1007,8 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
   def _add_task(cls,
                 worker_task,
                 mapreduce_spec,
-                queue_name):
+                queue_name,
+                transactional=False):
     """Schedule slice scanning by adding it to the task queue.
 
     Args:
@@ -996,15 +1017,15 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
       mapreduce_spec: an instance of model.MapreduceSpec.
       queue_name: Optional queue to run on; uses the current queue of
         execution or the default queue if unspecified.
+      transactional: If the task should be part of an existing transaction.
     """
     if not _run_task_hook(mapreduce_spec.get_hooks(),
                           "enqueue_worker_task",
                           worker_task,
-                          queue_name):
+                          queue_name,
+                          transactional=transactional):
       try:
-
-
-        worker_task.add(queue_name)
+        worker_task.add(queue_name, transactional=transactional)
       except (taskqueue.TombstonedTaskError,
               taskqueue.TaskAlreadyExistsError), e:
         logging.warning("Task %r already exists. %s: %s",
@@ -1012,49 +1033,78 @@ class MapperWorkerCallbackHandler(base_handler.HugeTaskHandler):
                         e.__class__,
                         e)
 
-  def _processing_limit(self, spec):
+  @classmethod
+  def _dynamic_processing_rate(
+      cls, slice_id, slice_length, initial_qps, bump_factor, bump_time):
+    """Calculates the MR rate on nth slice.
+
+    This method allows slow MR ramp up (to avoid hotspotting datastore).
+    We start at initial_qps and increase the pace by bump_factor each bump_time
+    seconds.
+
+    So for initial_qps=500, bump_factor=1.5 and bump_time=300 we would start
+    with 500qps (per MR) and increase it by 50% every 5min. We do continuous
+    increases.
+
+    To not deal with time, we use slice_id as time proxy and assume that each
+    slice takes slice_length seconds to execute (so slice 0 is executed at time
+    0, slice 1 at time 15s, and so on).
+
+    DYNAMIC_RATE_INITIAL_QPS_PARAM, DYNAMIC_RATE_BUMP_FACTOR_PARAM and
+    DYNAMIC_RATE_BUMP_TIME_PARAM must all be set and non-zero for dynamic rate
+    to be used.
+
+    The actual implementation will approximate the rate over the duration of the
+    slice. For instance, if per_shard rate is 10qps, we will allow a 15s slice
+    to process 150 entities as fast as possible and then schedule the following
+    slice with an ETA in the future (see _wait_time) so that the average rate
+    adds up to 10qps.
+
+    Args:
+      slice_id: Number of the slice.
+      slice_length: Slice length (in seconds) as configured for the MR.
+      initial_qps: Initial qps (per MR).
+      bump_factor: Factor by which the qps should increase.
+      bump_time: Time in seconds to increase the QPS by bump_factor.
+    Returns:
+      QPS for the MR for the given slice.
+    """
+    if bump_factor < 1:
+      raise errors.BadParamsError()
+    bump_count = slice_id * slice_length / bump_time
+    return initial_qps * bump_factor ** bump_count
+
+  def _processing_limit(self, tstate):
     """Get the limit on the number of map calls allowed by this slice.
 
     Args:
-      spec: a Mapreduce spec.
+      tstate: An instance of TransientShardState.
 
     Returns:
       The limit as a positive int if specified by user. -1 otherwise.
     """
-    processing_rate = float(spec.mapper.params.get("processing_rate", 0))
+    spec = tstate.mapreduce_spec
+    if (spec.mapper.params.get(parameters.DYNAMIC_RATE_INITIAL_QPS_PARAM) and
+        spec.mapper.params.get(parameters.DYNAMIC_RATE_BUMP_FACTOR_PARAM) and
+        spec.mapper.params.get(parameters.DYNAMIC_RATE_BUMP_TIME_PARAM)):
+      processing_rate = self._dynamic_processing_rate(
+          tstate.slice_id,
+          parameters.config._SLICE_DURATION_SEC,
+          float(spec.mapper.params.get(
+              parameters.DYNAMIC_RATE_INITIAL_QPS_PARAM)),
+          float(spec.mapper.params.get(
+              parameters.DYNAMIC_RATE_BUMP_FACTOR_PARAM)),
+          float(spec.mapper.params.get(
+              parameters.DYNAMIC_RATE_BUMP_TIME_PARAM)))
+    else:
+      processing_rate = float(spec.mapper.params.get("processing_rate", 0))
+
     slice_processing_limit = -1
     if processing_rate > 0:
       slice_processing_limit = int(math.ceil(
-          parameters.config._SLICE_DURATION_SEC*processing_rate/
+          parameters.config._SLICE_DURATION_SEC * processing_rate/
           int(spec.mapper.shard_count)))
     return slice_processing_limit
-
-
-
-  @classmethod
-  def _schedule_slice(cls,
-                      shard_state,
-                      tstate,
-                      queue_name=None,
-                      eta=None,
-                      countdown=None):
-    """Schedule slice scanning by adding it to the task queue.
-
-    Args:
-      shard_state: An instance of ShardState.
-      tstate: An instance of TransientShardState.
-      queue_name: Optional queue to run on; uses the current queue of
-        execution or the default queue if unspecified.
-      eta: Absolute time when the MR should execute. May not be specified
-        if 'countdown' is also supplied. This may be timezone-aware or
-        timezone-naive.
-      countdown: Time in seconds into the future that this MR should execute.
-        Defaults to zero.
-    """
-    queue_name = queue_name or os.environ.get("HTTP_X_APPENGINE_QUEUENAME",
-                                              "default")
-    task = cls._state_to_task(tstate, shard_state, eta, countdown)
-    cls._add_task(task, tstate.mapreduce_spec, queue_name)
 
 
 class ControllerCallbackHandler(base_handler.HugeTaskHandler):
@@ -1092,17 +1142,23 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     state.result_status = model.MapreduceState.RESULT_FAILED
     config = util.create_datastore_write_config(state.mapreduce_spec)
     puts = []
+    future = None
     for ss in model.ShardState.find_all_by_mapreduce_state(state):
       if ss.active:
         ss.set_for_failure()
         puts.append(ss)
 
         if len(puts) > model.ShardState._MAX_STATES_IN_MEMORY:
-          db.put(puts, config=config)
+          if future is not None:
+            future.get_result()
+          future = db.put_async(puts, config=config)
           puts = []
     db.put(puts, config=config)
+    if future is not None:
+      future.get_result()
 
-    db.put(state, config=config)
+
+    self._finalize_job(state.mapreduce_spec, state)
 
   def handle(self):
     """Handle request."""
@@ -1245,12 +1301,21 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
         model.MapreduceSpec.PARAM_DONE_CALLBACK_QUEUE))
     done_callback = mapreduce_spec.params.get(
         model.MapreduceSpec.PARAM_DONE_CALLBACK)
+    done_callback_target = mapreduce_spec.params.get(
+        model.MapreduceSpec.PARAM_DONE_CALLBACK_TARGET)
+
     done_task = None
     if done_callback:
+
+
+      headers = util._get_task_headers(
+          mapreduce_spec.mapreduce_id,
+          util.CALLBACK_MR_ID_TASK_HEADER,
+          set_host_header=(done_callback_target is None))
       done_task = taskqueue.Task(
           url=done_callback,
-          headers=util._get_task_headers(mapreduce_spec.mapreduce_id,
-                                         util.CALLBACK_MR_ID_TASK_HEADER),
+          target=done_callback_target,
+          headers=headers,
           method=mapreduce_spec.params.get("done_callback_method", "POST"))
 
     @db.transactional(retries=5)
@@ -1269,7 +1334,8 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
           mapreduce_spec.get_hooks(),
           "enqueue_done_task",
           done_task,
-          queue_name):
+          queue_name,
+          transactional=True):
         done_task.add(queue_name, transactional=True)
 
     _put_state()
@@ -1329,6 +1395,7 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
       queue_name: The queue to schedule this task on. Will use the current
         queue of execution if not supplied.
     """
+
     task_name = ControllerCallbackHandler.get_task_name(
         mapreduce_spec, serial_id)
     task_params = ControllerCallbackHandler.controller_parameters(
@@ -1347,7 +1414,8 @@ class ControllerCallbackHandler(base_handler.HugeTaskHandler):
     if not _run_task_hook(mapreduce_spec.get_hooks(),
                           "enqueue_controller_task",
                           controller_callback_task,
-                          queue_name):
+                          queue_name,
+                          transactional=False):
       try:
         controller_callback_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,
@@ -1404,11 +1472,16 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
     elif not result:
       return
 
-    queue_name = self.request.headers.get("X-AppEngine-QueueName")
-    KickOffJobHandler._schedule_shards(state.mapreduce_spec, readers,
-                                       queue_name,
-                                       state.mapreduce_spec.params["base_path"],
-                                       state)
+    try:
+      queue_name = self.request.headers.get("X-AppEngine-QueueName")
+      KickOffJobHandler._schedule_shards(
+          state.mapreduce_spec, readers, queue_name,
+          state.mapreduce_spec.params["base_path"], state)
+    except errors.FailJobError:
+
+
+      self._drop_gracefully()
+      return
 
     ControllerCallbackHandler.reschedule(
         state, state.mapreduce_spec, serial_id=0, queue_name=queue_name)
@@ -1561,6 +1634,7 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
 
 
 
+
     for shard_number, (input_reader, output_writer) in enumerate(
         zip(readers, writers)):
       shard_id = model.ShardState.shard_id_from_number(
@@ -1573,7 +1647,8 @@ class KickOffJobHandler(base_handler.TaskQueueHandler):
           shard_states[shard_number])
       MapperWorkerCallbackHandler._add_task(task,
                                             spec,
-                                            queue_name)
+                                            queue_name,
+                                            transactional=False)
 
   @classmethod
   def _check_mr_state(cls, state, mr_id):
@@ -1625,8 +1700,18 @@ class StartJobHandler(base_handler.PostJsonHandler):
       mr_params["queue_name"] = mapper_params["queue_name"]
 
 
-    mapper_params["processing_rate"] = int(mapper_params.get(
-        "processing_rate") or parameters.config.PROCESSING_RATE_PER_SEC)
+    mapper_params["processing_rate"] = int(
+        mapper_params.get("processing_rate") or
+        parameters.config.PROCESSING_RATE_PER_SEC)
+    mapper_params[parameters.DYNAMIC_RATE_INITIAL_QPS_PARAM] = float(
+        mapper_params.get(parameters.DYNAMIC_RATE_INITIAL_QPS_PARAM,
+                          parameters.config.INITIAL_QPS))
+    mapper_params[parameters.DYNAMIC_RATE_BUMP_FACTOR_PARAM] = float(
+        mapper_params.get(parameters.DYNAMIC_RATE_BUMP_FACTOR_PARAM,
+                          parameters.config.BUMP_FACTOR))
+    mapper_params[parameters.DYNAMIC_RATE_BUMP_TIME_PARAM] = float(
+        mapper_params.get(parameters.DYNAMIC_RATE_BUMP_TIME_PARAM,
+                          parameters.config.BUMP_TIME))
 
 
     mapper_spec = model.MapperSpec(
@@ -1641,7 +1726,8 @@ class StartJobHandler(base_handler.PostJsonHandler):
         mapper_spec,
         mr_params,
         queue_name=mr_params["queue_name"],
-        _app=mapper_params.get("_app"))
+        _app=mapper_params.get("_app"),
+        _database_id=mapper_params.get("_database_id", ""))
     self.json_response["mapreduce_id"] = mapreduce_id
 
   def _get_params(self, validator_parameter, name_prefix):
@@ -1704,6 +1790,7 @@ class StartJobHandler(base_handler.PostJsonHandler):
                  countdown=None,
                  hooks_class_name=None,
                  _app=None,
+                 _database_id=None,
                  in_xg_transaction=False):
 
 
@@ -1752,15 +1839,16 @@ class StartJobHandler(base_handler.PostJsonHandler):
 
     @db.transactional(propagation=propagation)
     def _txn():
-      cls._create_and_save_state(mapreduce_spec, _app)
+      future = cls._create_and_save_state(mapreduce_spec, _app, _database_id)
       cls._add_kickoff_task(mapreduce_params["base_path"], mapreduce_spec, eta,
                             countdown, queue_name)
+      future.get_result()
     _txn()
 
     return mapreduce_id
 
   @classmethod
-  def _create_and_save_state(cls, mapreduce_spec, _app):
+  def _create_and_save_state(cls, mapreduce_spec, _app, _database_id):
     """Save mapreduce state to datastore.
 
     Save state to datastore so that UI can see it immediately.
@@ -1768,9 +1856,10 @@ class StartJobHandler(base_handler.PostJsonHandler):
     Args:
       mapreduce_spec: model.MapreduceSpec,
       _app: app id if specified. None otherwise.
+      _database_id: Datastore database id if specified. None otherwise.
 
     Returns:
-      The saved Mapreduce state.
+      A future to the Mapreduce state.
     """
     state = model.MapreduceState.create_new(mapreduce_spec.mapreduce_id)
     state.mapreduce_spec = mapreduce_spec
@@ -1778,9 +1867,10 @@ class StartJobHandler(base_handler.PostJsonHandler):
     state.active_shards = 0
     if _app:
       state.app_id = _app
+    if _database_id is not None:
+      state.database_id = _database_id
     config = util.create_datastore_write_config(mapreduce_spec)
-    state.put(config=config)
-    return state
+    return db.put_async(state, config=config)
 
   @classmethod
   def _add_kickoff_task(cls,
@@ -1792,16 +1882,29 @@ class StartJobHandler(base_handler.PostJsonHandler):
     """Enqueues a new kickoff task."""
     params = {"mapreduce_id": mapreduce_spec.mapreduce_id}
 
+
+
+
+
+
+
+    mapreduce_target = mapreduce_spec.params.get(
+        model.MapreduceSpec.PARAM_MAPREDUCE_TARGET)
+    headers = util._get_task_headers(mapreduce_spec.mapreduce_id,
+                                     set_host_header=(mapreduce_target is None))
+
+
     kickoff_task = taskqueue.Task(
         url=base_path + "/kickoffjob_callback/" + mapreduce_spec.mapreduce_id,
-        headers=util._get_task_headers(mapreduce_spec.mapreduce_id),
+        headers=headers,
         params=params,
         eta=eta,
-        countdown=countdown)
+        countdown=countdown,
+        target=mapreduce_target)
     hooks = mapreduce_spec.get_hooks()
     if hooks is not None:
       try:
-        hooks.enqueue_kickoff_task(kickoff_task, queue_name)
+        hooks.enqueue_kickoff_task(kickoff_task, queue_name, True)
         return
       except NotImplementedError:
         pass
@@ -1843,7 +1946,8 @@ class FinalizeJobHandler(base_handler.TaskQueueHandler):
     if not _run_task_hook(mapreduce_spec.get_hooks(),
                           "enqueue_controller_task",
                           finalize_task,
-                          queue_name):
+                          queue_name,
+                          transactional=False):
       try:
         finalize_task.add(queue_name)
       except (taskqueue.TombstonedTaskError,

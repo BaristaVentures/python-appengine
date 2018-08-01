@@ -30,6 +30,7 @@ import os
 import select
 import struct
 import sys
+import threading
 
 from google.appengine.tools.devappserver2 import watcher_common
 
@@ -80,6 +81,10 @@ _ATTRIBUTE_NAMES = [
 # A mapping from the attribute mask/bit value to the name.
 _ATTRIBUTE_MASK_NAMES = {globals()[name]: name for name in _ATTRIBUTE_NAMES}
 
+# If 2 file changes are less than 100 ms apart,
+# aggregate them within one changes call.
+_AGGREGATE_CHANGES_MS_APART = 100
+
 
 def _bit_str(bits, mask_names):
   """Convert a bit field to list of names.
@@ -120,11 +125,14 @@ class InotifyFileWatcher(object):
     """
     assert _libc is not None, 'InotifyFileWatcher only available on Linux.'
     self._directories = [os.path.abspath(d) for d in directories]
+    # os.path.realpath() resolves symlinks while os.path.abspath() doesn't.
     self._real_directories = [os.path.realpath(d) for d in self._directories]
     self._watch_to_directory = {}
     self._directory_to_watch_descriptor = {}
     self._directory_to_subdirs = {}
     self._inotify_events = ''
+    self._skip_files_re = None
+    self._watcher_ignore_re = None
     self._inotify_fd = _libc.inotify_init()
     if self._inotify_fd < 0:
       error = OSError('failed call to inotify_init')
@@ -132,8 +140,11 @@ class InotifyFileWatcher(object):
       error.strerror = errno.errorcode[ctypes.get_errno()]
       raise error
     self._inotify_poll = select.poll()
+    # Protects operations that cannot be done while the watcher is quitting.
+    self._inotify_fd_lock = threading.Lock()
 
   def _remove_watch_for_path(self, path):
+    # Must be called with _inotify_fd_lock held.
     logging.debug('_remove_watch_for_path(%r)', path)
     wd = self._directory_to_watch_descriptor[path]
 
@@ -159,12 +170,17 @@ class InotifyFileWatcher(object):
     del self._directory_to_subdirs[path]
 
   def _add_watch_for_path(self, path):
+    # Must be called with _inotify_fd_lock held.
     logging.debug('_add_watch_for_path(%r)', path)
 
     for dirpath, directories, _ in itertools.chain(
         [(os.path.dirname(path), [os.path.basename(path)], None)],
         os.walk(path, topdown=True, followlinks=True)):
-      watcher_common.skip_ignored_dirs(directories)
+      skip_files_re = dirpath in self._directories and self._skip_files_re
+      watcher_common.skip_ignored_dirs(dirpath, directories,
+                                       self._watcher_ignore_re)
+      watcher_common.skip_ignored_dirs(dirpath, directories, skip_files_re)
+
       # TODO: this is not an ideal solution as there are other ways for
       # symlinks to confuse our algorithm but a general solution is going to
       # be very complex and this is good enough to solve the immediate problem
@@ -201,15 +217,38 @@ class InotifyFileWatcher(object):
         self._directory_to_watch_descriptor[directory_path] = watch_descriptor
         self._directory_to_subdirs[directory_path] = set()
 
+  def set_watcher_ignore_re(self, watcher_ignore_re):
+    """Allows the file watcher to ignore a custom pattern set by the user.
+
+    Args:
+      watcher_ignore_re: A RegexObject that optionally defines a pattern for the
+          file watcher to ignore.
+    """
+    self._watcher_ignore_re = watcher_ignore_re
+
+  def set_skip_files_re(self, skip_files_re):
+    """Allows the file watcher to respect skip_files in app.yaml.
+
+    Args:
+      skip_files_re: The skip_files field of current ModuleConfiguration,
+          defined in app.yaml.
+    """
+    self._skip_files_re = skip_files_re
+
   def start(self):
     """Start watching the directory for changes."""
-    self._inotify_poll.register(self._inotify_fd, select.POLLIN)
-    for directory in self._directories:
-      self._add_watch_for_path(directory)
+    with self._inotify_fd_lock:
+      if self._inotify_fd < 0:
+        return
+      self._inotify_poll.register(self._inotify_fd, select.POLLIN)
+      for directory in self._directories:
+        self._add_watch_for_path(directory)
 
   def quit(self):
     """Stop watching the directory for changes."""
-    os.close(self._inotify_fd)
+    with self._inotify_fd_lock:
+      os.close(self._inotify_fd)
+      self._inotify_fd = -1
 
   def changes(self, timeout_ms=0):
     """Return paths for changed files and directories.
@@ -217,10 +256,10 @@ class InotifyFileWatcher(object):
     start() must be called before this method.
 
     Args:
-      timeout_ms: a timeout in milliseconds on which this watcher will block
-                  waiting for a change. It allows for external polling threads
-                  to react immediately on a change instead of waiting for
-                  a random polling delay.
+      timeout_ms: A timeout in milliseconds on which this watcher will block
+          waiting for a change. It allows for external polling threads
+          to react immediately on a change instead of waiting for
+          a random polling delay.
 
     Returns:
       A set of strings representing file and directory paths that have changed
@@ -228,46 +267,53 @@ class InotifyFileWatcher(object):
     """
     paths = set()
     while True:
-      # Don't wait to detect subsequent changes after the initial one.
-      if not self._inotify_poll.poll(0 if paths else timeout_ms):
-        break
-
-      self._inotify_events += os.read(self._inotify_fd, 1024)
-      while len(self._inotify_events) > _INOTIFY_EVENT_SIZE:
-        wd, mask, cookie, length = _INOTIFY_EVENT.unpack(
-            self._inotify_events[:_INOTIFY_EVENT_SIZE])
-        if len(self._inotify_events) < _INOTIFY_EVENT_SIZE + length:
+      with self._inotify_fd_lock:
+        if self._inotify_fd < 0:
+          return set()
+        # Don't wait to detect subsequent changes after the initial one.
+        if not self._inotify_poll.poll(
+            _AGGREGATE_CHANGES_MS_APART if paths else timeout_ms):
           break
 
-        name = self._inotify_events[
-            _INOTIFY_EVENT_SIZE:_INOTIFY_EVENT_SIZE + length]
-        name = name.rstrip('\0')
+        self._inotify_events += os.read(self._inotify_fd, 1024)
+        while len(self._inotify_events) > _INOTIFY_EVENT_SIZE:
+          wd, mask, cookie, length = _INOTIFY_EVENT.unpack(
+              self._inotify_events[:_INOTIFY_EVENT_SIZE])
+          if len(self._inotify_events) < _INOTIFY_EVENT_SIZE + length:
+            break
 
-        logging.debug('wd=%s, mask=%s, cookie=%s, length=%s, name=%r',
-                      wd, _bit_str(mask, _ATTRIBUTE_MASK_NAMES), cookie, length,
-                      name)
+          name = self._inotify_events[
+              _INOTIFY_EVENT_SIZE:_INOTIFY_EVENT_SIZE + length]
+          name = name.rstrip('\0')
 
-        self._inotify_events = self._inotify_events[
-            _INOTIFY_EVENT_SIZE + length:]
+          logging.debug(
+              'wd=%s, mask=%s, cookie=%s, length=%s, name=%r', wd,
+              _bit_str(mask, _ATTRIBUTE_MASK_NAMES), cookie, length, name)
 
-        if mask & IN_IGNORED:
-          continue
-        try:
-          directory = self._watch_to_directory[wd]
-        except KeyError:
-          logging.debug('Watch deleted for watch descriptor=%d', wd)
-          continue
+          self._inotify_events = self._inotify_events[
+              _INOTIFY_EVENT_SIZE + length:]
 
-        path = os.path.join(directory, name)
-        if os.path.isdir(path) or path in self._directory_to_watch_descriptor:
-          if mask & IN_DELETE:
-            self._remove_watch_for_path(path)
-          elif mask & IN_MOVED_FROM:
-            self._remove_watch_for_path(path)
-          elif mask & IN_CREATE:
-            self._add_watch_for_path(path)
-          elif mask & IN_MOVED_TO:
-            self._add_watch_for_path(path)
-        if path not in paths and not watcher_common.ignore_file(path):
-          paths.add(path)
+          if mask & IN_IGNORED:
+            continue
+          try:
+            directory = self._watch_to_directory[wd]
+          except KeyError:
+            logging.debug('Watch deleted for watch descriptor=%d', wd)
+            continue
+
+          path = os.path.join(directory, name)
+          if os.path.isdir(path) or path in self._directory_to_watch_descriptor:
+            if mask & IN_DELETE:
+              self._remove_watch_for_path(path)
+            elif mask & IN_MOVED_FROM:
+              self._remove_watch_for_path(path)
+            elif mask & IN_CREATE:
+              self._add_watch_for_path(path)
+            elif mask & IN_MOVED_TO:
+              self._add_watch_for_path(path)
+          if path not in paths and (
+              not watcher_common.ignore_file(
+                  path, self._skip_files_re, self._watcher_ignore_re)):
+            paths.add(path)
+
     return paths

@@ -234,6 +234,7 @@ class _BaseIndex(object):
 
 
 
+
   ASCENDING = datastore_query.PropertyOrder.ASCENDING
   DESCENDING = datastore_query.PropertyOrder.DESCENDING
 
@@ -337,6 +338,9 @@ class DatastoreAdapter(datastore_rpc.AbstractAdapter):
           entity_pb.Index_Property.DESCENDING: Index.DESCENDING
       }
 
+  def __init__(self, _id_resolver=None):
+    super(DatastoreAdapter, self).__init__(_id_resolver)
+
   def key_to_pb(self, key):
     return key._Key__reference
 
@@ -383,7 +387,20 @@ def __InitConnection():
 
   if os.getenv(_ENV_KEY) and hasattr(_thread_local, 'connection_stack'):
     return
-  _thread_local.connection_stack = [datastore_rpc.Connection(adapter=_adapter)]
+
+
+  def CreateConnection(adapter=None,
+                       _id_resolver=None,
+                       _api_version=datastore_rpc._DATASTORE_V3):
+    if _id_resolver:
+      adapter = DatastoreAdapter(_id_resolver=_id_resolver)
+    return datastore_rpc.Connection(adapter=adapter, _api_version=_api_version)
+
+  _thread_local.connection_stack = [
+      datastore_rpc._CreateDefaultConnection(CreateConnection,
+                                             adapter=_adapter)
+  ]
+
 
   os.environ[_ENV_KEY] = '1'
 
@@ -774,8 +791,8 @@ class Entity(dict):
     if namespace is None:
       namespace = _namespace
     elif _namespace is not None:
-        raise datastore_errors.BadArgumentError(
-            "Must not set both _namespace and namespace parameters.")
+      raise datastore_errors.BadArgumentError(
+          "Must not set both _namespace and namespace parameters.")
 
     datastore_types.ValidateString(kind, 'kind',
                                    datastore_errors.BadArgumentError)
@@ -970,13 +987,18 @@ class Entity(dict):
       propname_xml = saxutils.quoteattr(propname)
 
       values = self[propname]
+      if isinstance(values, list) and not values:
+
+
+
+        continue
       if not isinstance(values, list):
         values = [values]
 
       proptype = datastore_types.PropertyTypeName(values[0])
       proptype_xml = saxutils.quoteattr(proptype)
-
       escaped_values = self._XmlEscapeValues(propname)
+
       open_tag = u'<property name=%s type=%s>' % (propname_xml, proptype_xml)
       close_tag = u'</property>'
       xml_properties += [open_tag + val + close_tag for val in escaped_values]
@@ -1210,8 +1232,8 @@ class Query(dict):
   > query['name ='] = 'Ryan'
   > query['age >='] = 21
 
-  This query returns all Person entities where the name property is 'Ryan',
-  'Ken', or 'Bret', and the age property is at least 21.
+  This query returns all Person entities where the name property is 'Ryan'
+  and the age property is at least 21.
 
   Another way to build this query is:
 
@@ -1331,8 +1353,8 @@ class Query(dict):
     if namespace is None:
       namespace = _namespace
     elif _namespace is not None:
-        raise datastore_errors.BadArgumentError(
-            "Must not set both _namespace and namespace parameters.")
+      raise datastore_errors.BadArgumentError(
+          "Must not set both _namespace and namespace parameters.")
 
     if kind is not None:
       datastore_types.ValidateString(kind, 'kind',
@@ -1836,6 +1858,8 @@ class Query(dict):
       re.MatchObject (never None) that matches the 'filter'. Group 1 is the
       property name, group 3 is the operator. (Group 2 is unused.)
     """
+    if isinstance(values, list) and not values:
+      raise datastore_errors.BadValueError("Cannot filter on []")
     try:
       match = Query.FILTER_REGEX.match(filter)
       if not match:
@@ -2487,6 +2511,30 @@ def RunInTransaction(function, *args, **kwargs):
   return RunInTransactionOptions(None, function, *args, **kwargs)
 
 
+def RunInReadOnlyTransaction(function, *args, **kwargs):
+  """Runs a function inside a read-only datastore transaction.
+
+     A read-only transaction cannot perform writes, but may be able to execute
+     more efficiently.
+
+     Runs the user-provided function inside a read-only transaction, retries
+     default number of times.
+
+  Args:
+    function: a function to be run inside the transaction on all remaining
+      arguments
+    *args: positional arguments for function.
+    **kwargs: keyword arguments for function.
+
+  Returns:
+    the function's return value, if any
+
+  Raises:
+    TransactionFailedError, if the transaction could not be committed.
+  """
+  return RunInReadOnlyTransactionOptions(None, function, *args, **kwargs)
+
+
 
 
 
@@ -2582,6 +2630,40 @@ def RunInTransactionOptions(options, function, *args, **kwargs):
   Raises:
     TransactionFailedError, if the transaction could not be committed.
   """
+  return _RunInTransactionInternal(options,
+                                   datastore_rpc.TransactionMode.READ_WRITE,
+                                   function, *args, **kwargs)
+
+
+def RunInReadOnlyTransactionOptions(options, function, *args, **kwargs):
+  """Runs a function inside a read-only datastore transaction.
+
+     A read-only transaction cannot perform writes, but may be able to execute
+     more efficiently.
+
+     Like RunInTransactionOptions, but with a read-only transaction.
+
+  Args:
+    options: TransactionOptions specifying options (number of retries, etc) for
+      this transaction
+    function: a function to be run inside the transaction on all remaining
+      arguments
+      *args: positional arguments for function.
+      **kwargs: keyword arguments for function.
+
+  Returns:
+    the function's return value, if any
+
+  Raises:
+    TransactionFailedError, if the transaction could not be committed.
+  """
+  return _RunInTransactionInternal(options,
+                                   datastore_rpc.TransactionMode.READ_ONLY,
+                                   function, *args, **kwargs)
+
+
+def _RunInTransactionInternal(options, mode, function, *args, **kwargs):
+  """Runs a function inside a datastore transaction."""
 
 
 
@@ -2601,7 +2683,8 @@ def RunInTransactionOptions(options, function, *args, **kwargs):
 
       txn_connection = _PopConnection()
       try:
-        return RunInTransactionOptions(options, function, *args, **kwargs)
+        return _RunInTransactionInternal(options, mode,
+                                         function, *args, **kwargs)
       finally:
         _PushConnection(txn_connection)
     return function(*args, **kwargs)
@@ -2616,19 +2699,41 @@ def RunInTransactionOptions(options, function, *args, **kwargs):
 
   conn = _GetConnection()
   _PushConnection(None)
+  previous_transaction = None
+  transactional_conn = None
   try:
 
-    for _ in range(0, retries + 1):
-      _SetConnection(conn.new_transaction(options))
+    for i in range(0, retries + 1):
+      transactional_conn = conn.new_transaction(options, previous_transaction,
+                                                mode)
+      _SetConnection(transactional_conn)
       ok, result = _DoOneTry(function, args, kwargs)
       if ok:
         return result
+
+      if i < retries:
+
+
+        logging.warning('Transaction collision. Retrying... %s', '')
+
+      if mode == datastore_rpc.TransactionMode.READ_WRITE:
+
+
+
+        previous_transaction = transactional_conn.transaction
   finally:
     _PopConnection()
 
+  if transactional_conn is not None:
+    try:
+      transactional_conn.rollback()
+    except Exception:
+
+      logging.exception('Exception sending Rollback:')
+
 
   raise datastore_errors.TransactionFailedError(
-    'The transaction could not be committed. Please try again.')
+      'The transaction could not be committed. Please try again.')
 
 
 def _DoOneTry(function, args, kwargs):
@@ -2659,9 +2764,6 @@ def _DoOneTry(function, args, kwargs):
     if _GetConnection().commit():
       return True, result
     else:
-
-
-      logging.warning('Transaction collision. Retrying... %s', '')
       return False, None
 
 
@@ -2858,7 +2960,7 @@ class Iterator(datastore_query.ResultsIterator):
     result = []
     for r in self:
       if len(result) >= count:
-        break;
+        break
       result.append(r)
     return result
 
