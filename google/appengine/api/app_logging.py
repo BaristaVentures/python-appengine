@@ -16,9 +16,6 @@
 #
 
 
-
-
-
 """Logging utilities for use by applications.
 
 Classes defined here:
@@ -31,18 +28,17 @@ Classes defined here:
 
 
 
-
-
-
 import logging
 
 from google.appengine import runtime
 from google.appengine.api import logservice
+from google.appengine.runtime import features
 
 
 
 
 NEWLINE_REPLACEMENT = "\0"
+
 
 class AppLogsHandler(logging.Handler):
   """Logging handler that will direct output to a persistent store of
@@ -69,14 +65,24 @@ class AppLogsHandler(logging.Handler):
     """Emit a record.
 
     This implementation is based on the implementation of
-    StreamHandler.emit()."""
+    StreamHandler.emit().
+
+    Args:
+      record: A Python logging.LogRecord object.
+    """
     try:
-      message = self._AppLogsMessage(record)
-      if isinstance(message, unicode):
-        message = message.encode("UTF-8")
+      if features.IsEnabled("LogServiceWriteRecord"):
+        logservice.write_record(self._AppLogsLevel(record.levelno),
+                                record.created,
+                                self.format(record),
+                                self._AppLogsLocation(record))
+      else:
+        message = self._AppLogsMessage(record)
+        if isinstance(message, unicode):
+          message = message.encode("UTF-8")
 
 
-      logservice.write(message)
+        logservice.write(message)
     except (KeyboardInterrupt, SystemExit, runtime.DeadlineExceededError):
       raise
     except:
@@ -96,7 +102,7 @@ class AppLogsHandler(logging.Handler):
                                message)
 
   def _AppLogsLevel(self, level):
-    """Converts the logging level used in Python to the API logging level"""
+    """Converts the logging level used in Python to the API logging level."""
     if level >= logging.CRITICAL:
       return 4
     elif level >= logging.ERROR:
@@ -107,3 +113,8 @@ class AppLogsHandler(logging.Handler):
       return 1
     else:
       return 0
+
+  def _AppLogsLocation(self, record):
+    """Find the source location responsible for calling the logging API."""
+    return (getattr(record, "pathname", None), getattr(record, "lineno", None),
+            getattr(record, "funcName", None))

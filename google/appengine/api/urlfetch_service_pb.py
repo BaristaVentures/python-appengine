@@ -18,11 +18,9 @@
 
 
 from google.net.proto import ProtocolBuffer
+import abc
 import array
 import dummy_thread as thread
-
-__pychecker__ = """maxreturns=0 maxbranches=0 no-callinit
-                   unusednames=printElemNumber,debug_strs no-special"""
 
 if hasattr(ProtocolBuffer, 'ExtendableProtocolMessage'):
   _extension_runtime = True
@@ -47,6 +45,7 @@ class URLFetchServiceError(ProtocolBuffer.ProtocolMessage):
   TOO_MANY_REDIRECTS =   10
   MALFORMED_REPLY =   11
   CONNECTION_ERROR =   12
+  PAYLOAD_TOO_LARGE =   13
 
   _ErrorCode_NAMES = {
     0: "OK",
@@ -62,6 +61,7 @@ class URLFetchServiceError(ProtocolBuffer.ProtocolMessage):
     10: "TOO_MANY_REDIRECTS",
     11: "MALFORMED_REPLY",
     12: "CONNECTION_ERROR",
+    13: "PAYLOAD_TOO_LARGE",
   }
 
   def ErrorCode_Name(cls, x): return cls._ErrorCode_NAMES.get(x, "")

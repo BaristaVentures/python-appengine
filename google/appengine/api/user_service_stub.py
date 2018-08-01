@@ -24,6 +24,7 @@
 
 
 
+import logging
 import os
 import urllib
 import urlparse
@@ -47,6 +48,12 @@ _OAUTH_EMAIL = 'example@example.com'
 _OAUTH_USER_ID = '0'
 _OAUTH_AUTH_DOMAIN = _DEFAULT_AUTH_DOMAIN
 _OAUTH_CLIENT_ID = '123456789.apps.googleusercontent.com'
+
+_OPENID_DEPRECATION_WARNING = (
+    'Open ID 2.0 support in the App Engine Users service is deprecated and '
+    'will soon be removed. Please see '
+    'https://cloud.google.com/appengine/docs/deprecations/open_id '
+    'for details.')
 
 
 class UserServiceStub(apiproxy_stub.APIProxyStub):
@@ -116,6 +123,20 @@ class UserServiceStub(apiproxy_stub.APIProxyStub):
     self.__scopes = scopes
     self.__client_id = client_id
 
+  def _Dynamic_SetOAuthUser(self, request, unused_response, unused_request_id):
+    """Local implementation of UserStubService.SetOAuthUser().
+
+    Args:
+      request: A user_stub_service_pb.SetOAuthUserRequest message.
+    """
+    self.SetOAuthUser(
+        email=request.email() or self.__email,
+        domain=request.auth_domain() or self.__domain,
+        user_id=request.user_id() or self.__user_id,
+        is_admin=request.is_admin() or self.__is_admin,
+        scopes=request.scopes_list() or self.__scopes,
+        client_id=request.client_id() or self.__client_id)
+
   def _Dynamic_CreateLoginURL(self, request, response, request_id):
     """Trivial implementation of UserService.CreateLoginURL().
 
@@ -125,6 +146,9 @@ class UserServiceStub(apiproxy_stub.APIProxyStub):
       request_id: A unique string identifying the request associated with the
           API call.
     """
+    if request.has_federated_identity():
+      logging.warning(_OPENID_DEPRECATION_WARNING)
+
     response.set_login_url(
         self._login_url %
         urllib.quote(self._AddHostToContinueURL(request.destination_url(),
@@ -175,17 +199,6 @@ class UserServiceStub(apiproxy_stub.APIProxyStub):
         response.set_is_project_writer(self.__is_admin)
       for scope in authorized_scopes:
         response.add_scopes(scope)
-
-  def _Dynamic_CheckOAuthSignature(self, unused_request, response, request_id):
-    """Trivial implementation of UserService.CheckOAuthSignature().
-
-    Args:
-      unused_request: a CheckOAuthSignatureRequest
-      response: a CheckOAuthSignatureResponse
-      request_id: A unique string identifying the request associated with the
-          API call.
-    """
-    response.set_oauth_consumer_key(_OAUTH_CONSUMER_KEY)
 
   def _AddHostToContinueURL(self, continue_url, request_id):
     """Adds the request host to the continue url if no host is specified.

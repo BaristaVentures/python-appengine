@@ -22,11 +22,11 @@
 
 Contains handlers to help with receiving mail and mail bounces.
 
-  InboundMailHandler: Has helper method for easily setting up
-    email receivers.
-  BounceNotificationHandler: Has helper method for easily setting
-    up bounce notification receiver. Will parse HTTP request to
-    extract bounce notification.
+  InboundMailHandler:
+    Provides a helper method for easily setting up email receivers.
+  BounceNotificationHandler:
+    Provides a helper method for easily setting up a bounce notification
+    receiver. Will parse HTTP request to extract the bounce notification.
 """
 
 
@@ -49,7 +49,7 @@ BOUNCE_NOTIFICATION_HANDLER_URL_PATH = '/_ah/bounce'
 class InboundMailHandler(webapp.RequestHandler):
   """Base class for inbound mail handlers.
 
-  Example:
+  Example::
 
     # Sub-class overrides receive method.
     class HelloReceiver(InboundMailHandler):
@@ -90,14 +90,10 @@ class InboundMailHandler(webapp.RequestHandler):
     return MAIL_HANDLER_URL_PATTERN, cls
 
 
-class InvalidBounceNotificationError(Exception):
-  """Error that indicates invalid data for a bounce notification handler."""
-
-
 class BounceNotificationHandler(webapp.RequestHandler):
   """Base class for bounce notification handlers.
 
-  Example:
+  Example::
 
     # Sub-class overrides receive method.
     class BounceLogger(BounceNotificationHandler):
@@ -142,36 +138,34 @@ class BounceNotification(object):
       original_raw_message: the raw message that caused the bounce.
 
     The 'original' and 'notification' dicts contain the following keys:
-      to, from, subject, text
+      to, cc, bcc, from, subject, text
 
     Args:
       post_vars: a dict-like object containing bounce information.
           This is typically the self.request.POST variable of a RequestHandler
-          object. The following keys are expected in the dict:
+          object. The following keys are handled in the dict:
             original-from
             original-to
+            original-cc
+            original-bcc
             original-subject
             original-text
             notification-from
             notification-to
+            notification-cc
+            notification-bcc
             notification-subject
             notification-text
             raw-message
-
-    Raises:
-      InvalidBounceNotification if any of the expected fields are missing.
     """
-    try:
-      self.__original = {}
-      self.__notification = {}
-      for field in ['to', 'from', 'subject', 'text']:
-        self.__original[field] = post_vars['original-' + field]
-        self.__notification[field] = post_vars['notification-' + field]
+    self.__original = {}
+    self.__notification = {}
+    for field in ['to', 'cc', 'bcc', 'from', 'subject', 'text']:
+      self.__original[field] = post_vars.get('original-' + field, '')
+      self.__notification[field] = post_vars.get('notification-' + field, '')
 
-      self.__original_raw_message = mail.InboundEmailMessage(
-          post_vars['raw-message'])
-    except KeyError, e:
-      raise InvalidBounceNotificationError(e[0])
+    self.__original_raw_message = mail.InboundEmailMessage(
+        post_vars.get('raw-message', ''))
 
   @property
   def original(self):

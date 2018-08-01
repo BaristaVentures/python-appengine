@@ -18,6 +18,7 @@
 
 
 from google.net.proto import ProtocolBuffer
+import abc
 import array
 import base64
 import dummy_thread as thread
@@ -27,11 +28,11 @@ except ImportError:
   _net_proto___parse__python = None
 import sys
 try:
-  __import__('google.net.rpc.python.rpc_internals_lite')
+  __import__('google.net.rpc.python.proto_python_api_1_stub')
   __import__('google.net.rpc.python.pywraprpc_lite')
-  rpc_internals = sys.modules.get('google.net.rpc.python.rpc_internals_lite')
+  proto_python_api_1_stub = sys.modules.get('google.net.rpc.python.proto_python_api_1_stub')
   pywraprpc = sys.modules.get('google.net.rpc.python.pywraprpc_lite')
-  _client_stub_base_class = rpc_internals.StubbyRPCBaseStub
+  _client_stub_base_class = proto_python_api_1_stub.Stub
 except ImportError:
   _client_stub_base_class = object
 try:
@@ -40,9 +41,6 @@ try:
   _server_stub_base_class = rpcserver.BaseRpcServer
 except ImportError:
   _server_stub_base_class = object
-
-__pychecker__ = """maxreturns=0 maxbranches=0 no-callinit
-                   unusednames=printElemNumber,debug_strs no-special"""
 
 if hasattr(ProtocolBuffer, 'ExtendableProtocolMessage'):
   _extension_runtime = True
@@ -171,7 +169,7 @@ class AppIdentityServiceError(ProtocolBuffer.ProtocolMessage):
   _STYLE_CONTENT_TYPE = """"""
   _PROTO_DESCRIPTOR_NAME = 'apphosting.AppIdentityServiceError'
   _SERIALIZED_DESCRIPTOR = array.array('B')
-  _SERIALIZED_DESCRIPTOR.fromstring(base64.decodestring("WjZhcHBob3N0aW5nL2FwaS9hcHBfaWRlbnRpdHkvYXBwX2lkZW50aXR5X3NlcnZpY2UucHJvdG8KImFwcGhvc3RpbmcuQXBwSWRlbnRpdHlTZXJ2aWNlRXJyb3JzeglFcnJvckNvZGWLAZIBB1NVQ0NFU1OYAQCMAYsBkgENVU5LTk9XTl9TQ09QRZgBCYwBiwGSAQ5CTE9CX1RPT19MQVJHRZgB6AeMAYsBkgERREVBRExJTkVfRVhDRUVERUSYAekHjAGLAZIBD05PVF9BX1ZBTElEX0FQUJgB6geMAYsBkgENVU5LTk9XTl9FUlJPUpgB6weMAYsBkgEZR0FJQU1JTlRfTk9UX0lOSVRJQUlMSVpFRJgB7AeMAYsBkgELTk9UX0FMTE9XRUSYAe0HjAGLAZIBD05PVF9JTVBMRU1FTlRFRJgB7geMAXS6AekMCjZhcHBob3N0aW5nL2FwaS9hcHBfaWRlbnRpdHkvYXBwX2lkZW50aXR5X3NlcnZpY2UucHJvdG8SCmFwcGhvc3Rpbmci5gEKF0FwcElkZW50aXR5U2VydmljZUVycm9yIsoBCglFcnJvckNvZGUSCwoHU1VDQ0VTUxAAEhEKDVVOS05PV05fU0NPUEUQCRITCg5CTE9CX1RPT19MQVJHRRDoBxIWChFERUFETElORV9FWENFRURFRBDpBxIUCg9OT1RfQV9WQUxJRF9BUFAQ6gcSEgoNVU5LTk9XTl9FUlJPUhDrBxIeChlHQUlBTUlOVF9OT1RfSU5JVElBSUxJWkVEEOwHEhAKC05PVF9BTExPV0VEEO0HEhQKD05PVF9JTVBMRU1FTlRFRBDuByIqChFTaWduRm9yQXBwUmVxdWVzdBIVCg1ieXRlc190b19zaWduGAEgASgMIj8KElNpZ25Gb3JBcHBSZXNwb25zZRIQCghrZXlfbmFtZRgBIAEoCRIXCg9zaWduYXR1cmVfYnl0ZXMYAiABKAwiIwohR2V0UHVibGljQ2VydGlmaWNhdGVGb3JBcHBSZXF1ZXN0IkMKEVB1YmxpY0NlcnRpZmljYXRlEhAKCGtleV9uYW1lGAEgASgJEhwKFHg1MDlfY2VydGlmaWNhdGVfcGVtGAIgASgJIo0BCiJHZXRQdWJsaWNDZXJ0aWZpY2F0ZUZvckFwcFJlc3BvbnNlEj4KF3B1YmxpY19jZXJ0aWZpY2F0ZV9saXN0GAEgAygLMh0uYXBwaG9zdGluZy5QdWJsaWNDZXJ0aWZpY2F0ZRInCh9tYXhfY2xpZW50X2NhY2hlX3RpbWVfaW5fc2Vjb25kGAIgASgDIh4KHEdldFNlcnZpY2VBY2NvdW50TmFtZVJlcXVlc3QiPQodR2V0U2VydmljZUFjY291bnROYW1lUmVzcG9uc2USHAoUc2VydmljZV9hY2NvdW50X25hbWUYASABKAkiYAoVR2V0QWNjZXNzVG9rZW5SZXF1ZXN0Eg0KBXNjb3BlGAEgAygJEhoKEnNlcnZpY2VfYWNjb3VudF9pZBgCIAEoAxIcChRzZXJ2aWNlX2FjY291bnRfbmFtZRgDIAEoCSJHChZHZXRBY2Nlc3NUb2tlblJlc3BvbnNlEhQKDGFjY2Vzc190b2tlbhgBIAEoCRIXCg9leHBpcmF0aW9uX3RpbWUYAiABKAMiIAoeR2V0RGVmYXVsdEdjc0J1Y2tldE5hbWVSZXF1ZXN0IkIKH0dldERlZmF1bHRHY3NCdWNrZXROYW1lUmVzcG9uc2USHwoXZGVmYXVsdF9nY3NfYnVja2V0X25hbWUYASABKAkyoAQKDlNpZ25pbmdTZXJ2aWNlEk0KClNpZ25Gb3JBcHASHS5hcHBob3N0aW5nLlNpZ25Gb3JBcHBSZXF1ZXN0Gh4uYXBwaG9zdGluZy5TaWduRm9yQXBwUmVzcG9uc2UiABJ+ChtHZXRQdWJsaWNDZXJ0aWZpY2F0ZXNGb3JBcHASLS5hcHBob3N0aW5nLkdldFB1YmxpY0NlcnRpZmljYXRlRm9yQXBwUmVxdWVzdBouLmFwcGhvc3RpbmcuR2V0UHVibGljQ2VydGlmaWNhdGVGb3JBcHBSZXNwb25zZSIAEm4KFUdldFNlcnZpY2VBY2NvdW50TmFtZRIoLmFwcGhvc3RpbmcuR2V0U2VydmljZUFjY291bnROYW1lUmVxdWVzdBopLmFwcGhvc3RpbmcuR2V0U2VydmljZUFjY291bnROYW1lUmVzcG9uc2UiABJZCg5HZXRBY2Nlc3NUb2tlbhIhLmFwcGhvc3RpbmcuR2V0QWNjZXNzVG9rZW5SZXF1ZXN0GiIuYXBwaG9zdGluZy5HZXRBY2Nlc3NUb2tlblJlc3BvbnNlIgASdAoXR2V0RGVmYXVsdEdjc0J1Y2tldE5hbWUSKi5hcHBob3N0aW5nLkdldERlZmF1bHRHY3NCdWNrZXROYW1lUmVxdWVzdBorLmFwcGhvc3RpbmcuR2V0RGVmYXVsdEdjc0J1Y2tldE5hbWVSZXNwb25zZSIAQkAKJGNvbS5nb29nbGUuYXBwZW5naW5lLmFwaS5hcHBpZGVudGl0eSABKAJCFEFwcElkZW50aXR5U2VydmljZVBi"))
+  _SERIALIZED_DESCRIPTOR.fromstring(base64.decodestring("WjZhcHBob3N0aW5nL2FwaS9hcHBfaWRlbnRpdHkvYXBwX2lkZW50aXR5X3NlcnZpY2UucHJvdG8KImFwcGhvc3RpbmcuQXBwSWRlbnRpdHlTZXJ2aWNlRXJyb3JzeglFcnJvckNvZGWLAZIBB1NVQ0NFU1OYAQCMAYsBkgENVU5LTk9XTl9TQ09QRZgBCYwBiwGSAQ5CTE9CX1RPT19MQVJHRZgB6AeMAYsBkgERREVBRExJTkVfRVhDRUVERUSYAekHjAGLAZIBD05PVF9BX1ZBTElEX0FQUJgB6geMAYsBkgENVU5LTk9XTl9FUlJPUpgB6weMAYsBkgEZR0FJQU1JTlRfTk9UX0lOSVRJQUlMSVpFRJgB7AeMAYsBkgELTk9UX0FMTE9XRUSYAe0HjAGLAZIBD05PVF9JTVBMRU1FTlRFRJgB7geMAXS6AecMCjZhcHBob3N0aW5nL2FwaS9hcHBfaWRlbnRpdHkvYXBwX2lkZW50aXR5X3NlcnZpY2UucHJvdG8SCmFwcGhvc3Rpbmci5gEKF0FwcElkZW50aXR5U2VydmljZUVycm9yIsoBCglFcnJvckNvZGUSCwoHU1VDQ0VTUxAAEhEKDVVOS05PV05fU0NPUEUQCRITCg5CTE9CX1RPT19MQVJHRRDoBxIWChFERUFETElORV9FWENFRURFRBDpBxIUCg9OT1RfQV9WQUxJRF9BUFAQ6gcSEgoNVU5LTk9XTl9FUlJPUhDrBxIeChlHQUlBTUlOVF9OT1RfSU5JVElBSUxJWkVEEOwHEhAKC05PVF9BTExPV0VEEO0HEhQKD05PVF9JTVBMRU1FTlRFRBDuByIqChFTaWduRm9yQXBwUmVxdWVzdBIVCg1ieXRlc190b19zaWduGAEgASgMIj8KElNpZ25Gb3JBcHBSZXNwb25zZRIQCghrZXlfbmFtZRgBIAEoCRIXCg9zaWduYXR1cmVfYnl0ZXMYAiABKAwiIwohR2V0UHVibGljQ2VydGlmaWNhdGVGb3JBcHBSZXF1ZXN0IkMKEVB1YmxpY0NlcnRpZmljYXRlEhAKCGtleV9uYW1lGAEgASgJEhwKFHg1MDlfY2VydGlmaWNhdGVfcGVtGAIgASgJIo0BCiJHZXRQdWJsaWNDZXJ0aWZpY2F0ZUZvckFwcFJlc3BvbnNlEj4KF3B1YmxpY19jZXJ0aWZpY2F0ZV9saXN0GAEgAygLMh0uYXBwaG9zdGluZy5QdWJsaWNDZXJ0aWZpY2F0ZRInCh9tYXhfY2xpZW50X2NhY2hlX3RpbWVfaW5fc2Vjb25kGAIgASgDIh4KHEdldFNlcnZpY2VBY2NvdW50TmFtZVJlcXVlc3QiPQodR2V0U2VydmljZUFjY291bnROYW1lUmVzcG9uc2USHAoUc2VydmljZV9hY2NvdW50X25hbWUYASABKAkiYAoVR2V0QWNjZXNzVG9rZW5SZXF1ZXN0Eg0KBXNjb3BlGAEgAygJEhoKEnNlcnZpY2VfYWNjb3VudF9pZBgCIAEoAxIcChRzZXJ2aWNlX2FjY291bnRfbmFtZRgDIAEoCSJHChZHZXRBY2Nlc3NUb2tlblJlc3BvbnNlEhQKDGFjY2Vzc190b2tlbhgBIAEoCRIXCg9leHBpcmF0aW9uX3RpbWUYAiABKAMiIAoeR2V0RGVmYXVsdEdjc0J1Y2tldE5hbWVSZXF1ZXN0IkIKH0dldERlZmF1bHRHY3NCdWNrZXROYW1lUmVzcG9uc2USHwoXZGVmYXVsdF9nY3NfYnVja2V0X25hbWUYASABKAkyoAQKDlNpZ25pbmdTZXJ2aWNlEk0KClNpZ25Gb3JBcHASHS5hcHBob3N0aW5nLlNpZ25Gb3JBcHBSZXF1ZXN0Gh4uYXBwaG9zdGluZy5TaWduRm9yQXBwUmVzcG9uc2UiABJ+ChtHZXRQdWJsaWNDZXJ0aWZpY2F0ZXNGb3JBcHASLS5hcHBob3N0aW5nLkdldFB1YmxpY0NlcnRpZmljYXRlRm9yQXBwUmVxdWVzdBouLmFwcGhvc3RpbmcuR2V0UHVibGljQ2VydGlmaWNhdGVGb3JBcHBSZXNwb25zZSIAEm4KFUdldFNlcnZpY2VBY2NvdW50TmFtZRIoLmFwcGhvc3RpbmcuR2V0U2VydmljZUFjY291bnROYW1lUmVxdWVzdBopLmFwcGhvc3RpbmcuR2V0U2VydmljZUFjY291bnROYW1lUmVzcG9uc2UiABJZCg5HZXRBY2Nlc3NUb2tlbhIhLmFwcGhvc3RpbmcuR2V0QWNjZXNzVG9rZW5SZXF1ZXN0GiIuYXBwaG9zdGluZy5HZXRBY2Nlc3NUb2tlblJlc3BvbnNlIgASdAoXR2V0RGVmYXVsdEdjc0J1Y2tldE5hbWUSKi5hcHBob3N0aW5nLkdldERlZmF1bHRHY3NCdWNrZXROYW1lUmVxdWVzdBorLmFwcGhvc3RpbmcuR2V0RGVmYXVsdEdjc0J1Y2tldE5hbWVSZXNwb25zZSIAQj4KJGNvbS5nb29nbGUuYXBwZW5naW5lLmFwaS5hcHBpZGVudGl0eSgCQhRBcHBJZGVudGl0eVNlcnZpY2VQYg=="))
   if _net_proto___parse__python is not None:
     _net_proto___parse__python.RegisterType(
         _SERIALIZED_DESCRIPTOR.tostring())
@@ -1728,7 +1726,101 @@ class GetDefaultGcsBucketNameResponse(ProtocolBuffer.ProtocolMessage):
 
 
 
-class _SigningService_ClientBaseStub(_client_stub_base_class):
+class SigningServiceStub(object):
+  """Makes Stubby RPC calls to a SigningService server."""
+
+  __metaclass__ = abc.ABCMeta
+
+  __slots__ = ()
+
+  @abc.abstractmethod
+  def SignForApp(self, request, rpc=None, callback=None, response=None):
+    """Make a SignForApp RPC call.
+
+    Args:
+      request: a SignForAppRequest instance.
+      rpc: Optional RPC instance to use for the call.
+      callback: Optional final callback. Will be called as
+          callback(rpc, result) when the rpc completes. If None, the
+          call is synchronous.
+      response: Optional ProtocolMessage to be filled in with response.
+
+    Returns:
+      The SignForAppResponse if callback is None. Otherwise, returns None.
+    """
+    raise NotImplementedError()
+
+  @abc.abstractmethod
+  def GetPublicCertificatesForApp(self, request, rpc=None, callback=None, response=None):
+    """Make a GetPublicCertificatesForApp RPC call.
+
+    Args:
+      request: a GetPublicCertificateForAppRequest instance.
+      rpc: Optional RPC instance to use for the call.
+      callback: Optional final callback. Will be called as
+          callback(rpc, result) when the rpc completes. If None, the
+          call is synchronous.
+      response: Optional ProtocolMessage to be filled in with response.
+
+    Returns:
+      The GetPublicCertificateForAppResponse if callback is None. Otherwise, returns None.
+    """
+    raise NotImplementedError()
+
+  @abc.abstractmethod
+  def GetServiceAccountName(self, request, rpc=None, callback=None, response=None):
+    """Make a GetServiceAccountName RPC call.
+
+    Args:
+      request: a GetServiceAccountNameRequest instance.
+      rpc: Optional RPC instance to use for the call.
+      callback: Optional final callback. Will be called as
+          callback(rpc, result) when the rpc completes. If None, the
+          call is synchronous.
+      response: Optional ProtocolMessage to be filled in with response.
+
+    Returns:
+      The GetServiceAccountNameResponse if callback is None. Otherwise, returns None.
+    """
+    raise NotImplementedError()
+
+  @abc.abstractmethod
+  def GetAccessToken(self, request, rpc=None, callback=None, response=None):
+    """Make a GetAccessToken RPC call.
+
+    Args:
+      request: a GetAccessTokenRequest instance.
+      rpc: Optional RPC instance to use for the call.
+      callback: Optional final callback. Will be called as
+          callback(rpc, result) when the rpc completes. If None, the
+          call is synchronous.
+      response: Optional ProtocolMessage to be filled in with response.
+
+    Returns:
+      The GetAccessTokenResponse if callback is None. Otherwise, returns None.
+    """
+    raise NotImplementedError()
+
+  @abc.abstractmethod
+  def GetDefaultGcsBucketName(self, request, rpc=None, callback=None, response=None):
+    """Make a GetDefaultGcsBucketName RPC call.
+
+    Args:
+      request: a GetDefaultGcsBucketNameRequest instance.
+      rpc: Optional RPC instance to use for the call.
+      callback: Optional final callback. Will be called as
+          callback(rpc, result) when the rpc completes. If None, the
+          call is synchronous.
+      response: Optional ProtocolMessage to be filled in with response.
+
+    Returns:
+      The GetDefaultGcsBucketNameResponse if callback is None. Otherwise, returns None.
+    """
+    raise NotImplementedError()
+
+
+class _SigningService_ClientBaseStub(
+    SigningServiceStub, _client_stub_base_class):
   """Makes Stubby RPC calls to a SigningService server."""
 
   __slots__ = (
@@ -1739,8 +1831,9 @@ class _SigningService_ClientBaseStub(_client_stub_base_class):
       '_protorpc_GetDefaultGcsBucketName', '_full_name_GetDefaultGcsBucketName',
   )
 
-  def __init__(self, rpc_stub):
-    self._stub = rpc_stub
+  def __init__(self, rpc_stub, rpc_factory=None):
+    super(_SigningService_ClientBaseStub, self).__init__(
+        None, inject_stub=rpc_stub, rpc_factory=rpc_factory)
 
     self._protorpc_SignForApp = pywraprpc.RPC()
     self._full_name_SignForApp = self._stub.GetFullMethodName(
@@ -1785,7 +1878,8 @@ class _SigningService_ClientBaseStub(_client_stub_base_class):
                           request,
                           response,
                           callback,
-                          self._protorpc_SignForApp)
+                          self._protorpc_SignForApp,
+                          package_name='apphosting')
 
   def GetPublicCertificatesForApp(self, request, rpc=None, callback=None, response=None):
     """Make a GetPublicCertificatesForApp RPC call.
@@ -1810,7 +1904,8 @@ class _SigningService_ClientBaseStub(_client_stub_base_class):
                           request,
                           response,
                           callback,
-                          self._protorpc_GetPublicCertificatesForApp)
+                          self._protorpc_GetPublicCertificatesForApp,
+                          package_name='apphosting')
 
   def GetServiceAccountName(self, request, rpc=None, callback=None, response=None):
     """Make a GetServiceAccountName RPC call.
@@ -1835,7 +1930,8 @@ class _SigningService_ClientBaseStub(_client_stub_base_class):
                           request,
                           response,
                           callback,
-                          self._protorpc_GetServiceAccountName)
+                          self._protorpc_GetServiceAccountName,
+                          package_name='apphosting')
 
   def GetAccessToken(self, request, rpc=None, callback=None, response=None):
     """Make a GetAccessToken RPC call.
@@ -1860,7 +1956,8 @@ class _SigningService_ClientBaseStub(_client_stub_base_class):
                           request,
                           response,
                           callback,
-                          self._protorpc_GetAccessToken)
+                          self._protorpc_GetAccessToken,
+                          package_name='apphosting')
 
   def GetDefaultGcsBucketName(self, request, rpc=None, callback=None, response=None):
     """Make a GetDefaultGcsBucketName RPC call.
@@ -1885,31 +1982,33 @@ class _SigningService_ClientBaseStub(_client_stub_base_class):
                           request,
                           response,
                           callback,
-                          self._protorpc_GetDefaultGcsBucketName)
+                          self._protorpc_GetDefaultGcsBucketName,
+                          package_name='apphosting')
 
 
 class _SigningService_ClientStub(_SigningService_ClientBaseStub):
   __slots__ = ('_params',)
-  def __init__(self, rpc_stub_parameters, service_name):
+  def __init__(self, rpc_stub_parameters, service_name, rpc_factory=None):
     if service_name is None:
       service_name = 'SigningService'
-    _SigningService_ClientBaseStub.__init__(self, pywraprpc.RPC_GenericStub(service_name, rpc_stub_parameters))
+    stub = pywraprpc.RPC_GenericStub(service_name, rpc_stub_parameters)
+    super(_SigningService_ClientStub, self).__init__(stub, rpc_factory=rpc_factory)
     self._params = rpc_stub_parameters
 
 
 class _SigningService_RPC2ClientStub(_SigningService_ClientBaseStub):
   __slots__ = ()
-  def __init__(self, server, channel, service_name):
+  def __init__(self, server, channel, service_name, rpc_factory=None):
     if service_name is None:
       service_name = 'SigningService'
-    if channel is not None:
-      if channel.version() == 1:
-        raise RuntimeError('Expecting an RPC2 channel to create the stub')
-      _SigningService_ClientBaseStub.__init__(self, pywraprpc.RPC_GenericStub(service_name, channel))
-    elif server is not None:
-      _SigningService_ClientBaseStub.__init__(self, pywraprpc.RPC_GenericStub(service_name, pywraprpc.NewClientChannel(server)))
-    else:
-      raise RuntimeError('Invalid argument combination to create a stub')
+    if channel is None:
+      if server is None:
+        raise RuntimeError('Invalid argument combination to create a stub')
+      channel = pywraprpc.NewClientChannel(server)
+    elif channel.version() == 1:
+      raise RuntimeError('Expecting an RPC2 channel to create the stub')
+    stub = pywraprpc.RPC_GenericStub(service_name, channel)
+    super(_SigningService_RPC2ClientStub, self).__init__(stub, rpc_factory=rpc_factory)
 
 
 class SigningService(_server_stub_base_class):
@@ -1935,7 +2034,12 @@ class SigningService(_server_stub_base_class):
   def __init__(self, *args, **kwargs):
     """Creates a Stubby RPC server.
 
-    See BaseRpcServer.__init__ in rpcserver.py for detail on arguments.
+    The arguments to this constructor are the same as the arguments to
+    BaseRpcServer.__init__ in rpcserver.py *MINUS* export_name. This
+    constructor passes its own value for export_name to
+    BaseRpcServer.__init__, so callers of this constructor should only
+    pass to this constructor values corresponding to
+    BaseRpcServer.__init__'s remaining arguments.
     """
     if _server_stub_base_class is object:
       raise NotImplementedError('Add //net/rpc/python:rpcserver as a '
@@ -1943,32 +2047,33 @@ class SigningService(_server_stub_base_class):
     _server_stub_base_class.__init__(self, 'apphosting.SigningService', *args, **kwargs)
 
   @staticmethod
-  def NewStub(rpc_stub_parameters, service_name=None):
-    """Creates a new SigningService Stubby client stub.
-
-    Args:
-      rpc_stub_parameters: an RPC_StubParameter instance.
-      service_name: the service name used by the Stubby server.
-    """
-
+  def NewStub(rpc_stub_parameters, service_name=None, rpc_factory=None):
+    """USE NewRPC2Stub INSTEAD."""
     if _client_stub_base_class is object:
       raise RuntimeError('Add //net/rpc/python as a dependency to use Stubby')
-    return _SigningService_ClientStub(rpc_stub_parameters, service_name)
+    return _SigningService_ClientStub(
+        rpc_stub_parameters, service_name, rpc_factory=rpc_factory)
 
   @staticmethod
-  def NewRPC2Stub(server=None, channel=None, service_name=None):
+  def NewRPC2Stub(
+      server=None, channel=None, service_name=None, rpc_factory=None):
     """Creates a new SigningService Stubby2 client stub.
 
     Args:
-      server: host:port or bns address.
+      server: host:port or bns address (favor passing a channel instead).
       channel: directly use a channel to create a stub. Will ignore server
           argument if this is specified.
       service_name: the service name used by the Stubby server.
+      rpc_factory: the rpc factory to use if no rpc argument is specified.
+
+    Returns:
+     A SigningServiceStub to be used to invoke RPCs.
     """
 
     if _client_stub_base_class is object:
-      raise RuntimeError('Add //net/rpc/python as a dependency to use Stubby')
-    return _SigningService_RPC2ClientStub(server, channel, service_name)
+      raise RuntimeError('Add //net/rpc/python:proto_python_api_2_stub (or maybe //net/rpc/python:proto_python_api_1_stub, but eww and b/67959631) as a dependency to create Stubby stubs')
+    return _SigningService_RPC2ClientStub(
+        server, channel, service_name, rpc_factory=rpc_factory)
 
   def SignForApp(self, rpc, request, response):
     """Handles a SignForApp RPC call. You should override this.
@@ -1978,7 +2083,7 @@ class SigningService(_server_stub_base_class):
       request: a SignForAppRequest that contains the client request
       response: a SignForAppResponse that should be modified to send the response
     """
-    raise NotImplementedError
+    raise NotImplementedError()
 
 
   def GetPublicCertificatesForApp(self, rpc, request, response):
@@ -1989,7 +2094,7 @@ class SigningService(_server_stub_base_class):
       request: a GetPublicCertificateForAppRequest that contains the client request
       response: a GetPublicCertificateForAppResponse that should be modified to send the response
     """
-    raise NotImplementedError
+    raise NotImplementedError()
 
 
   def GetServiceAccountName(self, rpc, request, response):
@@ -2000,7 +2105,7 @@ class SigningService(_server_stub_base_class):
       request: a GetServiceAccountNameRequest that contains the client request
       response: a GetServiceAccountNameResponse that should be modified to send the response
     """
-    raise NotImplementedError
+    raise NotImplementedError()
 
 
   def GetAccessToken(self, rpc, request, response):
@@ -2011,7 +2116,7 @@ class SigningService(_server_stub_base_class):
       request: a GetAccessTokenRequest that contains the client request
       response: a GetAccessTokenResponse that should be modified to send the response
     """
-    raise NotImplementedError
+    raise NotImplementedError()
 
 
   def GetDefaultGcsBucketName(self, rpc, request, response):
@@ -2022,7 +2127,7 @@ class SigningService(_server_stub_base_class):
       request: a GetDefaultGcsBucketNameRequest that contains the client request
       response: a GetDefaultGcsBucketNameResponse that should be modified to send the response
     """
-    raise NotImplementedError
+    raise NotImplementedError()
 
   def _AddMethodAttributes(self):
     """Sets attributes on Python RPC handlers.

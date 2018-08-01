@@ -18,11 +18,9 @@
 
 
 from google.net.proto import ProtocolBuffer
+import abc
 import array
 import dummy_thread as thread
-
-__pychecker__ = """maxreturns=0 maxbranches=0 no-callinit
-                   unusednames=printElemNumber,debug_strs no-special"""
 
 if hasattr(ProtocolBuffer, 'ExtendableProtocolMessage'):
   _extension_runtime = True
@@ -613,30 +611,25 @@ class GetDefaultVersionResponse(ProtocolBuffer.ProtocolMessage):
 
   def IsInitialized(self, debug_strs=None):
     initialized = 1
-    if (not self.has_version_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: version not set.')
     return initialized
 
   def ByteSize(self):
     n = 0
-    n += self.lengthString(len(self.version_))
-    return n + 1
+    if (self.has_version_): n += 1 + self.lengthString(len(self.version_))
+    return n
 
   def ByteSizePartial(self):
     n = 0
-    if (self.has_version_):
-      n += 1
-      n += self.lengthString(len(self.version_))
+    if (self.has_version_): n += 1 + self.lengthString(len(self.version_))
     return n
 
   def Clear(self):
     self.clear_version()
 
   def OutputUnchecked(self, out):
-    out.putVarInt32(10)
-    out.putPrefixedString(self.version_)
+    if (self.has_version_):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.version_)
 
   def OutputPartial(self, out):
     if (self.has_version_):
@@ -842,30 +835,25 @@ class GetNumInstancesResponse(ProtocolBuffer.ProtocolMessage):
 
   def IsInitialized(self, debug_strs=None):
     initialized = 1
-    if (not self.has_instances_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: instances not set.')
     return initialized
 
   def ByteSize(self):
     n = 0
-    n += self.lengthVarInt64(self.instances_)
-    return n + 1
+    if (self.has_instances_): n += 1 + self.lengthVarInt64(self.instances_)
+    return n
 
   def ByteSizePartial(self):
     n = 0
-    if (self.has_instances_):
-      n += 1
-      n += self.lengthVarInt64(self.instances_)
+    if (self.has_instances_): n += 1 + self.lengthVarInt64(self.instances_)
     return n
 
   def Clear(self):
     self.clear_instances()
 
   def OutputUnchecked(self, out):
-    out.putVarInt32(8)
-    out.putVarInt64(self.instances_)
+    if (self.has_instances_):
+      out.putVarInt32(8)
+      out.putVarInt64(self.instances_)
 
   def OutputPartial(self, out):
     if (self.has_instances_):
@@ -1736,30 +1724,25 @@ class GetHostnameResponse(ProtocolBuffer.ProtocolMessage):
 
   def IsInitialized(self, debug_strs=None):
     initialized = 1
-    if (not self.has_hostname_):
-      initialized = 0
-      if debug_strs is not None:
-        debug_strs.append('Required field: hostname not set.')
     return initialized
 
   def ByteSize(self):
     n = 0
-    n += self.lengthString(len(self.hostname_))
-    return n + 1
+    if (self.has_hostname_): n += 1 + self.lengthString(len(self.hostname_))
+    return n
 
   def ByteSizePartial(self):
     n = 0
-    if (self.has_hostname_):
-      n += 1
-      n += self.lengthString(len(self.hostname_))
+    if (self.has_hostname_): n += 1 + self.lengthString(len(self.hostname_))
     return n
 
   def Clear(self):
     self.clear_hostname()
 
   def OutputUnchecked(self, out):
-    out.putVarInt32(10)
-    out.putPrefixedString(self.hostname_)
+    if (self.has_hostname_):
+      out.putVarInt32(10)
+      out.putPrefixedString(self.hostname_)
 
   def OutputPartial(self, out):
     if (self.has_hostname_):

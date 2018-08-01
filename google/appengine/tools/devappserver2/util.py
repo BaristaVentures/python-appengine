@@ -19,7 +19,21 @@
 
 
 
+import BaseHTTPServer
+import os
+import platform
+import socket
+import urllib
 import wsgiref.headers
+from google.appengine.tools import sdk_update_checker
+
+
+# The SDK version returned when there is no available VERSION file.
+_DEFAULT_SDK_VERSION = '(Internal)'
+
+# This environment variable is intended for making ndb to work with the
+# Cloud Datastore instead of the App Engine Datastore.
+_DATASTORE_PROJECT_ID_ENV = 'DATASTORE_PROJECT_ID'
 
 
 def get_headers_from_environ(environ):
@@ -47,6 +61,36 @@ def get_headers_from_environ(environ):
   return headers
 
 
+def construct_url_from_environ(environ, secure, include_query_params, port):
+  """Construct a URL from the environ and other parameters.
+
+  Implementation adapted from
+  https://www.python.org/dev/peps/pep-0333/#url-reconstruction.
+
+  Args:
+    environ: An environ dict as defined in PEP-333.
+    secure: boolean, if True the url will be https, otherwise http
+    include_query_params: boolean, if True will include query params from
+      environ
+    port: int, the port for the new url
+
+  Returns:
+    str, the constructed URL.
+  """
+  url_result = 'https' if secure else 'http'
+  url_result += '://'
+  if environ.get('HTTP_HOST'):
+    url_result += environ['HTTP_HOST'].split(':')[0]
+  else:
+    url_result += environ['SERVER_NAME']
+  url_result += ':' + str(port)
+  url_result += urllib.quote(environ.get('SCRIPT_NAME', ''))
+  url_result += urllib.quote(environ.get('PATH_INFO', ''))
+  if include_query_params and environ.get('QUERY_STRING'):
+    url_result += '?' + environ['QUERY_STRING']
+  return url_result
+
+
 def put_headers_in_environ(headers, environ):
   """Given a list of headers, put them into environ based on PEP-333.
 
@@ -60,3 +104,52 @@ def put_headers_in_environ(headers, environ):
   """
   for key, value in headers:
     environ['HTTP_%s' % key.upper().replace('-', '_')] = value
+
+
+def is_env_flex(env):
+  return env in ['2', 'flex', 'flexible']
+
+
+class HTTPServerIPv6(BaseHTTPServer.HTTPServer):
+  """An HTTPServer that supports IPv6 connections.
+
+  The standard HTTPServer has address_family hardcoded to socket.AF_INET.
+  """
+  address_family = socket.AF_INET6
+
+
+def get_sdk_version():
+  """Parses the SDK VERSION file for the SDK version.
+
+  Returns:
+    A semver string representing the SDK version, eg 1.9.55. If no VERSION file
+    is available, eg for internal SDK builds, a non-semver default string is
+    provided.
+  """
+  version_object = sdk_update_checker.GetVersionObject()
+  if version_object:
+    return version_object['release']
+  else:
+    return _DEFAULT_SDK_VERSION
+
+
+def setup_environ(app_id):
+  """Sets up the os.environ dictionary for the front-end server and API server.
+
+  This function should only be called once.
+
+  Args:
+    app_id: The id of the application.
+  """
+  os.environ['APPLICATION_ID'] = app_id
+  # Purge _DATASTORE_PROJECT_ID_ENV from dev_appserver process. Otherwise the
+  # logics for datastore rpc would be tricked to use Cloud Datastore mode.
+  # If necessary, users can still pass this environment variable to local
+  # runtime processes via app.yaml or the --env_var flag.
+  if _DATASTORE_PROJECT_ID_ENV in os.environ:
+    del os.environ[_DATASTORE_PROJECT_ID_ENV]
+
+
+def is_windows():
+  """Returns a boolean indicating whether dev_appserver is on windows."""
+  return platform.system().lower() == 'windows'

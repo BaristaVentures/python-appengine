@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-version = '1.9.15'
+version = '1.9.73'
 
 setup(
   name='python-appengine',
